@@ -10,7 +10,7 @@ def main():
     src_stream_uri = 'http://itaca.gast.it.uc3m.es:9100/events/priority'
     server = StreamServer(9101)
     annotator = annotate.DriverAnnotator()
-    stream = annotate.AnnotatedStream( \
+    stream = annotate.AnnotatedRelayStream( \
                             'annotated',
                             [src_stream_uri],
                             annotator,

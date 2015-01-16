@@ -42,7 +42,7 @@ class GenericAnnotator(object):
         elif key in self.ns:
             uri_ref = self.ns[key][suffix]
         else:
-            uri_ref = self.ns[''][key + '#' + suffix]
+            uri_ref = self.ns[''][key + '-' + suffix]
         return uri_ref
 
     def _create_uri_ref(self, key, suffix):
@@ -68,54 +68,76 @@ class GenericAnnotator(object):
 
 class DriverAnnotator(GenericAnnotator):
 
-    ns_hermes = 'http://webtlab.it.uc3m.es/ns/hermes/'
+    ns_hermes = 'http://webtlab.it.uc3m.es/ns/hermes/driver#'
+    ns_geo = 'http://www.w3.org/2003/01/geo/wgs84_pos#'
+    application_id = 'smart-driver'
 
     def __init__(self):
         super(DriverAnnotator, self).__init__()
         self.register_ns('', DriverAnnotator.ns_hermes, prefix='hermes')
+        self.register_ns('geo', DriverAnnotator.ns_geo, prefix='geo')
         self._create_uri_refs([
-            ('', 'averageSpeed'),
+            ('', 'Observation'),
+            ('', 'Driver'),
+            ('', 'ObservationId'),
+            ('', 'DriverId'),
+            ('', 'average_hrm'),
+            ('', 'average_speed'),
             ('', 'efficiency'),
-            ('', 'latitude'),
-            ('', 'longitude'),
-            ('', 'averageHRM'),
-            ('', 'workLoad'),
+            ('', 'work_load'),
+            ('', 'driver'),
+            ('geo', 'lat'),
+            ('geo', 'long'),
         ])
 
     def annotate_event(self, event):
-        if not isinstance(event, ztreamy.events.JSONEvent):
+        if (not isinstance(event, ztreamy.events.JSONEvent)
+            or not event.application_id == DriverAnnotator.application_id):
             return []
         graph = self._create_graph()
-        measurement = self._uri_ref('measurement', event.event_id)
+        observation = self._uri_ref('ObservationId', event.event_id)
+        graph.add((observation,
+                   rdflib.RDF.type,
+                   self._uri_ref('', 'Observation')))
+        graph.add((observation,
+                   self._uri_ref('', 'driver'),
+                   self._uri_ref('DriverId', event.source_id)))
         if 'averageHRM' in event.body:
-            graph.add((measurement,
-                       self._uri_ref('', 'averageHRM'),
+            graph.add((observation,
+                       self._uri_ref('', 'average_hrm'),
                        rdflib.Literal(event.body['averageHRM'])))
         if 'averageSpeed' in event.body:
-            graph.add((measurement,
-                       self._uri_ref('', 'averageSpeed'),
+            graph.add((observation,
+                       self._uri_ref('', 'average_speed'),
                        rdflib.Literal(event.body['averageSpeed'])))
         if 'efficiency' in event.body:
-            graph.add((measurement,
+            graph.add((observation,
                        self._uri_ref('', 'efficiency'),
                        rdflib.Literal(event.body['efficiency'].strip())))
+        if 'workLoad' in event.body:
+            graph.add((observation,
+                       self._uri_ref('', 'workload'),
+                       rdflib.Literal(event.body['workLoad'].strip())))
         if 'longitud' in event.body:
-            graph.add((measurement,
-                       self._uri_ref('', 'longitude'),
+            graph.add((observation,
+                       self._uri_ref('geo', 'long'),
                        rdflib.Literal(event.body['longitud'])))
         if 'latitud' in event.body:
-            graph.add((measurement,
-                       self._uri_ref('', 'latitude'),
+            graph.add((observation,
+                       self._uri_ref('geo', 'lat'),
                        rdflib.Literal(event.body['latitud'])))
-        if 'workLoad' in event.body:
-            graph.add((measurement,
-                       self._uri_ref('', 'workLoad'),
-                       rdflib.Literal(event.body['workLoad'].strip())))
         return [self._create_event(event, graph)]
 
 
-class AnnotatedStream(ztreamy.server.RelayStream):
+class AnnotatedStream(ztreamy.server.Stream):
+    def __init__(self, path, annotator, **kwargs):
+        kwargs['event_adapter'] = annotator.annotate_events
+        kwargs['parse_event_body'] = True
+        super(AnnotatedStream, self).__init__(path, **kwargs)
+
+
+class AnnotatedRelayStream(ztreamy.server.RelayStream):
     def __init__(self, path, streams, annotator, **kwargs):
         kwargs['event_adapter'] = annotator.annotate_events
         kwargs['parse_event_body'] = True
-        super(AnnotatedStream, self).__init__(path, streams, **kwargs)
+        super(AnnotatedRelayStream, self).__init__(path, streams, **kwargs)
