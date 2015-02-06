@@ -93,7 +93,7 @@ class DriverAnnotator(GenericAnnotator):
     def annotate_event(self, event):
         if (not isinstance(event, ztreamy.events.JSONEvent)
             or not event.application_id == DriverAnnotator.application_id):
-            return []
+            return [event]
         graph = self._create_graph()
         observation = self._uri_ref('ObservationId', event.event_id)
         graph.add((observation,
