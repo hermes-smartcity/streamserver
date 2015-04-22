@@ -39,15 +39,13 @@ requirements = ['setuptools',
                 'simplejson',
                 'ztreamy',
                 ]
-if sys.version_info[1] == 6:
-    requirements.append('argparse')
 
 
 setup(
     name = "hermes-semserver",
-    version = "0.1",
+    version = "0.2",
     author = "Jesus Arias Fisteus",
-    description = ("A framework for publishing semantic events on the Web"),
+    description = ("A framework for publishing semantic events for HERMES"),
     keywords = "rdf sensors web semantic-sensor-web",
     url = "http://www.it.uc3m.es/jaf/ztreamy",
     packages=['semserver'],
