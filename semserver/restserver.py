@@ -28,7 +28,6 @@ class DriverDataClient(ztreamy.Client):
 
     def _event_callback(self, event):
         self.db[event.source_id] = event
-        print(str(self.db.get(event.source_id)))
 
     def _connection_close_callback(self):
         pass
