@@ -7,17 +7,13 @@ import tornado.web
 import ztreamy
 
 
-class DriverDataClient(ztreamy.Client):
-    database_name = 'hermes_driverdata.db'
-    application_id = 'SmartDriver'
-
-    def __init__(self, source_urls):
-        super(DriverDataClient, self).__init__( \
+class DataClient(ztreamy.Client):
+    def __init__(self, source_urls, database_name, data_filter):
+        super(DataClient, self).__init__( \
                     source_urls,
-                    ztreamy.ApplicationFilter(self._event_callback,
-                             application_id=DriverDataClient.application_id),
-                    connection_close_callback=self._connection_close_callback)
-        self.db = shelve.open(DriverDataClient.database_name)
+                    data_filter,
+                    connection_close_callback=self.connection_close_callback)
+        self.db = shelve.open(database_name)
 
     def close(self):
         self.db.close()
@@ -26,14 +22,50 @@ class DriverDataClient(ztreamy.Client):
     def get(self, source_id):
         return self.db.get(source_id)
 
-    def _event_callback(self, event):
+    def event_callback(self, event):
         self.db[event.source_id] = event
 
-    def _connection_close_callback(self):
+    def connection_close_callback(self):
         pass
 
 
-class LatestDriverDataHandler(tornado.web.RequestHandler):
+class DriverDataClient(DataClient):
+    database_name = 'hermes_driverdata.db'
+    application_id = 'SmartDriver'
+
+    def __init__(self, source_urls):
+        super(DriverDataClient, self).__init__( \
+                    source_urls,
+                    DriverDataClient.database_name,
+                    ztreamy.ApplicationFilter(self.event_callback,
+                             application_id=DriverDataClient.application_id))
+
+
+class SleepDataClient(DataClient):
+    database_name = 'hermes_sleepdata.db'
+    application_id = 'Hermes-Citizen-Fitbit-Sleep'
+
+    def __init__(self, source_urls):
+        super(SleepDataClient, self).__init__( \
+                    source_urls,
+                    SleepDataClient.database_name,
+                    ztreamy.ApplicationFilter(self.event_callback,
+                             application_id=SleepDataClient.application_id))
+
+
+class StepsDataClient(DataClient):
+    database_name = 'hermes_stepsdata.db'
+    application_id = 'Hermes-Citizen-Fitbit-Steps'
+
+    def __init__(self, source_urls):
+        super(StepsDataClient, self).__init__( \
+                    source_urls,
+                    StepsDataClient.database_name,
+                    ztreamy.ApplicationFilter(self.event_callback,
+                             application_id=StepsDataClient.application_id))
+
+
+class LatestDataHandler(tornado.web.RequestHandler):
     def initialize(self, data_client):
         self.data_client = data_client
 
@@ -55,8 +87,6 @@ def _read_cmd_options():
     import tornado.options
     tornado.options.define('port', default=9101, help='run on the given port',
                            type=int)
-    tornado.options.define('path', default='/last_driver_data',
-                           help='Resource path beginning with a slash')
     remaining = tornado.options.parse_command_line()
     options = Values()
     if len(remaining) >= 1:
@@ -69,21 +99,28 @@ def main():
     import tornado.options
     options = _read_cmd_options()
     driver_client = DriverDataClient(options.stream_urls)
-    if tornado.options.options.path.startswith('/'):
-        path = tornado.options.options.path
-    else:
-        path = '/' + tornado.options.options.path
+    sleep_client = SleepDataClient(options.stream_urls)
+    steps_client = StepsDataClient(options.stream_urls)
     application = tornado.web.Application([
-        (path, LatestDriverDataHandler, {'data_client': driver_client}),
+        ('/last_driver_data', LatestDataHandler,
+         {'data_client': driver_client}),
+        ('/last_sleep_data', LatestDataHandler,
+         {'data_client': sleep_client}),
+        ('/last_steps_data', LatestDataHandler,
+         {'data_client': steps_client}),
     ])
     try:
         driver_client.start()
+        sleep_client.start()
+        steps_client.start()
         application.listen(tornado.options.options.port)
         tornado.ioloop.IOLoop.instance().start()
     except KeyboardInterrupt:
         pass
     finally:
         driver_client.close()
+        sleep_client.close()
+        steps_client.close()
 
 
 if __name__ == "__main__":
