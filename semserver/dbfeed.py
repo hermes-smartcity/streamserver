@@ -66,8 +66,12 @@ def main():
     stream = ztreamy.RelayStream('dbfeed',
                                  [src_stream_uri],
                                  buffering_time=buffering_time)
+    test_stream = ztreamy.RelayStream('dbfeed-test',
+                                 [src_stream_uri],
+                                 buffering_time=buffering_time)
     server.add_stream(stream)
-    debug_publisher = ztreamy.client.LocalEventPublisher(stream)
+    server.add_stream(test_stream)
+    debug_publisher = ztreamy.client.LocalEventPublisher(test_stream)
     log_data_scheduler = LogDataScheduler('log-hermes-sample-4.txt.gz',
                                 debug_publisher,
                                 ztreamy.tools.utils.get_scheduler('exp[5.0]'))
