@@ -1,0 +1,272 @@
+<rdf:RDF xmlns="http://webtlab.it.uc3m.es/ns/hermes/driver#"
+	xml:base="http://webtlab.it.uc3m.es/ns/hermes/driver"
+	xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+	xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+	xmlns:xsd="http://www.w3.org/2001/XMLschema#"
+	xmlns:geo="http://www.w3.org/2003/01/geo/wgs84_pos#">
+
+
+	<!--------------------------- CLASSES --------------------->
+	
+	<!------------  USERS / SENSORS -->
+	
+	<!--NOTE: Maybe we should talk about Sensors -attached to users-
+	instead of Users directly. Cause in the future we may have general
+	sensors, like AVM in buses, or things like that.--> 
+	
+	<rdfs:Class rdf:ID="User">
+	</rdfs:Class>	
+	
+	<rdfs:Class rdf:ID="Driver">
+		<rdfs:subClassOf rdf:resource="&hermes;User"/>
+	</rdfs:Class>	
+	
+	<rdfs:Class rdf:ID="Pedestrian">
+		<rdfs:subClassOf rdf:resource="&hermes;User"/>
+	</rdfs:Class>
+	
+	<!------------  OBSERVATIONS -->
+	
+	<!--NOTE: Maybe we should talk about the properties that a particular 
+	observation observes - and make a hierarchy of properties - instead of 
+	making a hierarchy of observations -->
+	
+	<!-- I no longer see an observation as a type of 'Spatial Thing' -->
+	<rdfs:Class rdf:ID="Observation">
+		<rdfs:comment>
+		An observation registered by a mobile or digital sensor from 
+		a particular user in a moment of time.		
+		</rdfs:comment>		
+	</rdfs:Class>
+
+	<!------------  OBSERVATIONS FROM SMART DRIVER-->
+	
+	<rdfs:Class rdf:ID="Driving">
+		<rdfs:comment>
+		An event registered by the sensor - smartphone - of a user 
+		while driving a car. Two types of events: those appearing 
+		when an unusual value occurs while driving, and those that 
+		are automatically triggered when a driving section - a path in 
+		the traveling - is completed.			
+		</rdfs:comment>		
+		<rdfs:subClassOf rdf:resource="&hermes;Observation"/>
+	</rdfs:Class>
+	
+	<!--NOTE: The distinction of the two types of events does not make 
+	sense in this representational level - it's an issue related to the 
+	application, 'when' an observation is triggered-. 
+	However, depending on the observation, we want to know the 
+	distance of the path -if it is not an unexpected event -. -->
+		
+	<rdfs:Class rdf:ID="Speed">
+		<rdfs:comment>
+		An Observation related to the speed of the automobile.
+		</rdfs:comment>		
+		<rdfs:subClassOf rdf:resource="&hermes;Driving"/>
+	</rdfs:Class>
+	
+	<rdfs:Class rdf:ID="Heart_Rate">
+		<rdfs:comment>
+		An Observation related to a driver pulse.
+		</rdfs:comment>		
+		<rdfs:subClassOf rdf:resource="&hermes;Driving"/>
+	</rdfs:Class>
+	
+	<rdfs:Class rdf:ID="High_Heart_Rate">
+		<rdfs:comment>
+		An Observation related to a driver pulse when unexpected.
+		It does not advise about the distance of the path.
+		</rdfs:comment>		
+		<rdfs:subClassOf rdf:resource="&hermes;Heart_Rate"/>
+	</rdfs:Class>
+	
+	<rdfs:Class rdf:ID="Stopping">
+		<rdfs:comment>
+		An Observation related to the number of stops in a completed 
+		path.		
+		</rdfs:comment>		
+		<rdfs:subClassOf rdf:resource="&hermes;Driving"/>
+	</rdfs:Class>
+	
+	<rdfs:Class rdf:ID="Kinetics">
+		<rdfs:comment>
+		An Observation related to the driving agressivity, which
+		depends on the frequency and intensity of possitive
+		accelerations.
+		</rdfs:comment>		
+		<rdfs:subClassOf rdf:resource="&hermes;Driving"/>
+	</rdfs:Class>
+	
+	<rdfs:Class rdf:ID="Acceleration">
+		<rdfs:comment>
+		An unexpected Observation related to driving acceleration.
+		Either high acceleration or high deceleration can be observed.
+		</rdfs:comment>		
+		<rdfs:subClassOf rdf:resource="&hermes;Driving"/>
+	</rdfs:Class>
+	
+	<!------------  OBSERVATIONS FROM FITBIT-->
+	
+	<rdfs:Class rdf:ID="Stepping">
+		<rdfs:comment>
+		An event registered by a user's Fitbit device	while walking -or running-.
+		</rdfs:comment>		
+		<rdfs:subClassOf rdf:resource="&hermes;Observation"/>
+	</rdfs:Class>
+
+	<rdfs:Class rdf:ID="Step_Set">
+		<rdfs:comment>
+		The set of steps given by a pedestrian and collected with the 
+		Fitbit device.
+		</rdfs:comment>				
+	</rdfs:Class>
+
+
+	<!------------------------ PROPERTIES -------------->
+	
+	<rdf:Property rdf:ID="has_user">
+		<rdfs:comment>
+			The owner of the the sensor that has detected the observation.
+		</rdfs:comment>	
+		<rdfs:domain rdf:resource="#Observation">
+		<rdfs:range rdf:resource="#User"/>
+	</rdf:Property>
+	
+	<rdf:Property rdf:ID="has_driver">
+		<rdfs:comment>
+			The owner of the the sensor that has detected the observation.
+		</rdfs:comment>	
+		<rdfs:subPropertyOf rdf:resource="&hermes;has_user"/>
+		<rdfs:domain rdf:resource="#Driving">
+		<rdfs:range rdf:resource="#Driver"/>
+	</rdf:Property>
+	
+	<rdf:Property rdf:ID="has_pedestrian">
+		<rdfs:comment>
+			The owner of the the Fitbit device.
+		</rdfs:comment>	
+		<rdfs:subPropertyOf rdf:resource="&hermes;has_user"/>
+		<rdfs:domain rdf:resource="#Stepping">
+		<rdfs:range rdf:resource="#Pedestrian"/>
+	</rdf:Property>
+	
+	<rdf:Property rdf:ID="uri">
+		<rdfs:comment>
+		This property can take the values N, NE, E, S, ES, SW, W or WN.
+		</rdfs:comment>
+		<rdfs:domain rdf:resource="#Observation">
+		<rdf:range rdf:resource="&rdf;Literal">
+	</rdf:Property>
+	
+	<rdf:Property rdf:ID="orientation">
+		<rdfs:comment>
+		This property can take the values N, NE, E, S, ES, SW, W or WN.
+		</rdfs:comment>
+		<rdfs:domain rdf:resource="#Driving">
+		<rdf:range rdf:resource="&rdf;Literal">
+	</rdf:Property>
+	
+	<rdf:Property rdf:ID="has_location">
+		<rdfs:comment>
+		The plot where this observation has been taken.
+		Properties 'lat' and 'long' from geo points are in decimal 
+		degrees, float points.
+		</rdfs:comment>	
+		<rdfs:domain rdf:resource="#Driving">
+		<rdfs:range rdf:resource="&geo;SpatialThing"/>
+	</rdf:Property>
+	
+	<rdf:Property rdf:ID="completed_distance">
+		<rdfs:comment>
+		The distance - in meters - of the section or path completed.
+		</rdfs:comment>	
+		<rdfs:domain rdf:resource="#SectionDriving">
+		<rdfs:range rdf:resource="&xsd;float"/>
+	</rdf:Property>
+	
+	<rdf:Property rdf:ID="speed_value">
+		<rdfs:comment>
+			The speed in km/h.
+		</rdfs:comment>	
+		<rdfs:domain rdf:resource="#Speed">
+		<rdfs:range rdf:resource="&xsd;float"/>
+	</rdf:Property>
+	
+	<rdf:Property rdf:ID="speed_type">
+		<rdfs:comment>
+			The kind of speed the Driving Observation have obtained.
+			It can take the values: 
+			- "deviation", for the standard deviation speed;
+			- "average", for the average speed;
+			- "low" or "high", for inefficient speed observed.
+		</rdfs:comment>	
+		<rdfs:domain rdf:resource="#Speed">
+		<rdfs:range rdf:resource="&rdf;Literal"/>
+	</rdf:Property>
+	
+	<rdf:Property rdf:ID="bpm">
+		<rdfs:comment>
+			The beats per minute of a driver, in b/min.
+		</rdfs:comment>	
+		<rdfs:domain rdf:resource="#Heart_Rate">
+		<rdfs:range rdf:resource="&xsd;nonNegativeInteger"/>
+	</rdf:Property>
+	
+	<rdf:Property rdf:ID="stops">
+		<rdfs:comment>
+			The number of stops in a completed path.
+		</rdfs:comment>	
+		<rdfs:domain rdf:resource="#Stopping">
+		<rdfs:range rdf:resource="&xsd;nonNegativeInteger"/>
+	</rdf:Property>	
+	
+	<rdf:Property rdf:ID="energy">
+		<rdfs:comment>
+			The positive kinetic energy value, in m/s2 -same as acceleration-.
+		</rdfs:comment>	
+		<rdfs:domain rdf:resource="#Kinetics">
+		<rdfs:range rdf:resource="&xsd;float"/>
+	</rdf:Property>
+	
+	<rdf:Property rdf:ID="acceleration">
+		<rdfs:comment>
+			The acceleration of an Observation, in m/s2.
+			It refers to a deceleration when its value is less than 0.
+		</rdfs:comment>	
+		<rdfs:domain rdf:resource="#Acceleration">
+		<rdfs:range rdf:resource="&xsd;float"/>
+	</rdf:Property>
+	
+	<rdf:Property rdf:ID="on_date">
+		<rdfs:comment>
+		The day -yyyy/mm/dd- of the observed stepping.
+		</rdfs:comment>	
+		<rdfs:domain rdf:resource="#Stepping">
+		<rdfs:range rdf:resource="&xsd;date"/>
+	</rdf:Property>
+	
+	<rdf:Property rdf:ID="at_time">
+		<rdfs:comment>
+		The time -hh:mm:ss- of the observed stepping set.
+		</rdfs:comment>	
+		<rdfs:domain rdf:resource="#Step_Set">
+		<rdfs:range rdf:resource="&xsd;time"/>
+	</rdf:Property>
+	
+	<rdf:Property rdf:ID="stops">
+		<rdfs:comment>
+			The number of steps made by a Pedestrian for a particular date and time observed.
+		</rdfs:comment>	
+		<rdfs:domain rdf:resource="#Step_Set">
+		<rdfs:range rdf:resource="&xsd;nonNegativeInteger"/>
+	</rdf:Property>
+	
+	<rdf:Property rdf:ID="has_step_set">
+		<rdfs:comment>
+			The set of steps observed in a particular date and time.
+		</rdfs:comment>			
+		<rdfs:domain rdf:resource="#Stepping">
+		<rdfs:range rdf:resource="#Step_Set"/>
+	</rdf:Property>
+	
+</rdf:RDF>
