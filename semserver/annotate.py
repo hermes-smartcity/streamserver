@@ -7,12 +7,14 @@ import ztreamy.events
 import ztreamy.server
 import ztreamy.rdfevents
 
+
 class GenericAnnotator(object):
 
     def __init__(self):
         self.ns = {}
         self.uri_ref_cache = {}
         self.namespace_manager = NamespaceManager(rdflib.Graph())
+        self.annotation_dispatcher = {}
 
     def annotate_events(self, events):
         annotated = []
@@ -23,10 +25,16 @@ class GenericAnnotator(object):
     def annotate_event(self, event):
         """Annotates the event and returns a resulting list of events.
 
-        Intended to be overriden by subclasses.
+        The annotation dispatcher is intended to be configured
+        by the subclasses.
 
         """
-        return event
+        func = self.annotation_dispatcher.get(event.application_id,
+                                              self.identity_annotator)
+        return func(event)
+
+    def identity_annotator(self, event):
+        return [event]
 
     def register_ns(self, key, uri_prefix, prefix=None):
         self.ns[key] = rdflib.Namespace(uri_prefix)
@@ -66,66 +74,144 @@ class GenericAnnotator(object):
             extra_headers={'X-Derived-From': event.event_id})
 
 
-class DriverAnnotator(GenericAnnotator):
+class HermesAnnotator(GenericAnnotator):
 
-    ns_hermes = 'http://webtlab.it.uc3m.es/ns/hermes/driver#'
+    ns_hermes = 'http://webtlab.it.uc3m.es/ns/hermes#'
     ns_geo = 'http://www.w3.org/2003/01/geo/wgs84_pos#'
-    application_id = 'smart-driver'
+    application_id = 'SmartDriver'
 
     def __init__(self):
-        super(DriverAnnotator, self).__init__()
-        self.register_ns('', DriverAnnotator.ns_hermes, prefix='hermes')
-        self.register_ns('geo', DriverAnnotator.ns_geo, prefix='geo')
+        super(HermesAnnotator, self).__init__()
+        self.register_ns('', HermesAnnotator.ns_hermes, prefix='hermes')
+        self.register_ns('geo', HermesAnnotator.ns_geo, prefix='geo')
         self._create_uri_refs([
-            ('', 'Observation'),
+            ('', 'Id-Observation'),
+            ('', 'Id-User'),
+            ('', 'User'),
             ('', 'Driver'),
-            ('', 'ObservationId'),
-            ('', 'DriverId'),
-            ('', 'average_hrm'),
-            ('', 'average_speed'),
-            ('', 'efficiency'),
-            ('', 'work_load'),
-            ('', 'driver'),
+            ('', 'Pedestrian'),
+            ('', 'Observation'),
+            ('', 'Driving'),
+            ('', 'Speed'),
+            ('', 'Heart_Rate'),
+            ('', 'High_Heart_Rate'),
+            ('', 'Stopping'),
+            ('', 'Kinetics'),
+            ('', 'Acceleration'),
+            ('', 'Stepping'),
+            ('', 'Step_Set'),
+            ('', 'has_user'),
+            ('', 'has_driver'),
+            ('', 'has_pedestrian'),
+            ('', 'orientation'),
+            ('', 'has_location'),
+            ('', 'completed_distance'),
+            ('', 'speed_value'),
+            ('', 'speed_type'),
+            ('', 'bpm'),
+            ('', 'stops'),
+            ('', 'energy'),
+            ('', 'acceleration'),
+            ('', 'on_date'),
+            ('', 'at_time'),
+            ('', 'steps'),
+            ('', 'has_step_set'),
+            ('geo', 'SpatialThing'),
             ('geo', 'lat'),
             ('geo', 'long'),
         ])
+        self.annotation_dispatcher[HermesAnnotator.application_id] = \
+            self.annotate_event_driver
+        self.classes = {
+            'Average Speed Section': 'Speed',
+            'Standard Deviation of Vehicle Speed Section': 'Speed',
+            'Inefficient Speed Section': 'Speed',
+            'Heart Rate Section': 'Heart_Rate',
+            'Standard Deviation Heart Rate Section': 'Heart_Rate',
+            'High Heart Rate': 'High_Heart_Rate',
+            'Stops Section': 'Stopping',
+            'Positive Kinetic Energy': 'Kinetics',
+            'High Acceleration': 'Acceleration',
+            'High Deceleration': 'Acceleration',
+        }
 
-    def annotate_event(self, event):
+    def annotate_event_driver(self, event):
         if (not isinstance(event, ztreamy.events.JSONEvent)
-            or not event.application_id == DriverAnnotator.application_id):
+            or len(event.body.keys()) != 1
+            or list(event.body.keys())[0] not in self.classes):
             return [event]
+        top_key = list(event.body.keys())[0]
+        data = event.body[top_key]
         graph = self._create_graph()
-        observation = self._uri_ref('ObservationId', event.event_id)
+        observation = self._uri_ref('Id-Observation', event.event_id)
         graph.add((observation,
                    rdflib.RDF.type,
-                   self._uri_ref('', 'Observation')))
+                   self._uri_ref('', self.classes[top_key])))
         graph.add((observation,
-                   self._uri_ref('', 'driver'),
-                   self._uri_ref('DriverId', event.source_id)))
-        if 'averageHRM' in event.body:
+                   self._uri_ref('', 'has_driver'),
+                   self._uri_ref('Id-User', event.source_id)))
+        graph.add((observation,
+                   self._uri_ref('', 'orientation'),
+                   rdflib.Literal(data['orientation'])))
+        location = rdflib.BNode()
+        graph.add((observation,
+                   self._uri_ref('', 'has_location'),
+                   location))
+        graph.add((location,
+                   rdflib.RDF.type,
+                   self._uri_ref('geo', 'SpatialThing')))
+        graph.add((location,
+                   self._uri_ref('geo', 'lat'),
+                   rdflib.Literal(data['latitude'])))
+        graph.add((location,
+                   self._uri_ref('geo', 'long'),
+                   rdflib.Literal(data['longitude'])))
+        if 'distancia' in data:
             graph.add((observation,
-                       self._uri_ref('', 'average_hrm'),
-                       rdflib.Literal(event.body['averageHRM'])))
-        if 'averageSpeed' in event.body:
+                       self._uri_ref('', 'completed_distance'),
+                       rdflib.Literal(data['distancia'])))
+        if top_key == 'Average Speed Section':
             graph.add((observation,
-                       self._uri_ref('', 'average_speed'),
-                       rdflib.Literal(event.body['averageSpeed'])))
-        if 'efficiency' in event.body:
+                       self._uri_ref('', 'speed_value'),
+                       rdflib.Literal(data['value'])))
             graph.add((observation,
-                       self._uri_ref('', 'efficiency'),
-                       rdflib.Literal(event.body['efficiency'].strip())))
-        if 'workLoad' in event.body:
+                       self._uri_ref('', 'speed_type'),
+                       rdflib.Literal('average')))
+        elif top_key == 'Standard Deviation of Vehicle Speed Section':
             graph.add((observation,
-                       self._uri_ref('', 'workload'),
-                       rdflib.Literal(event.body['workLoad'].strip())))
-        if 'longitud' in event.body:
+                       self._uri_ref('', 'speed_value'),
+                       rdflib.Literal(data['value'])))
             graph.add((observation,
-                       self._uri_ref('geo', 'long'),
-                       rdflib.Literal(event.body['longitud'])))
-        if 'latitud' in event.body:
+                       self._uri_ref('', 'speed_type'),
+                       rdflib.Literal('deviation')))
+        elif top_key == 'Inefficient Speed Section':
             graph.add((observation,
-                       self._uri_ref('geo', 'lat'),
-                       rdflib.Literal(event.body['latitud'])))
+                       self._uri_ref('', 'speed_type'),
+                       rdflib.Literal(data['value'])))
+        elif (top_key == 'Heart Rate Section'
+              or top_key == 'High Heart Rate'):
+            graph.add((observation,
+                       self._uri_ref('', 'bpm'),
+                       rdflib.Literal(data['value'])))
+        elif top_key == 'Standard Deviation Heart Rate Section':
+            graph.add((observation,
+                       self._uri_ref('', 'bpm'),
+                       rdflib.Literal(data['value'])))
+        elif top_key == 'Stops Section':
+            graph.add((observation,
+                       self._uri_ref('', 'stops'),
+                       rdflib.Literal(data['value'])))
+        elif top_key == 'Positive Kinetic Energy':
+            graph.add((observation,
+                       self._uri_ref('', 'energy'),
+                       rdflib.Literal(data['value'])))
+        elif (top_key == 'High Acceleration'
+            or top_key == 'High Deceleration'):
+            graph.add((observation,
+                       self._uri_ref('', 'acceleration'),
+                       rdflib.Literal(data['value'])))
+        else:
+            raise ValueError('Unhandled key: ' + top_key)
         return [self._create_event(event, graph)]
 
 

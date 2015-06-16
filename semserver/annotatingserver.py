@@ -1,7 +1,7 @@
 from __future__ import unicode_literals, print_function
 
 import tornado.options
-from ztreamy import StreamServer
+import ztreamy
 
 from . import annotate
 
@@ -21,14 +21,19 @@ def main():
         buffering_time = tornado.options.options.buffer * 1000
     else:
         buffering_time = None
-    server = StreamServer(port)
-    annotator = annotate.DriverAnnotator()
-    stream = annotate.AnnotatedStream( \
-                            stream_name,
-                            annotator,
-                            buffering_time=buffering_time,
-                            allow_publish=True)
-    server.add_stream(stream)
+    server = ztreamy.StreamServer(port)
+    collector_stream = ztreamy.Stream(stream_name,
+                                      parse_event_body=True,
+                                      buffering_time=buffering_time,
+                                      allow_publish=True)
+    annotator = annotate.HermesAnnotator()
+    annotated_stream = annotate.AnnotatedRelayStream( \
+                                        'annotated',
+                                        collector_stream,
+                                        annotator,
+                                        buffering_time=buffering_time)
+    server.add_stream(collector_stream)
+    server.add_stream(annotated_stream)
     try:
         server.start()
     except KeyboardInterrupt:

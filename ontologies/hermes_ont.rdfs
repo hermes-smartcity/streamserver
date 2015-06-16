@@ -1,5 +1,5 @@
-<rdf:RDF xmlns="http://webtlab.it.uc3m.es/ns/hermes/driver#"
-	xml:base="http://webtlab.it.uc3m.es/ns/hermes/driver"
+<rdf:RDF xmlns="http://webtlab.it.uc3m.es/ns/hermes#"
+	xml:base="http://webtlab.it.uc3m.es/ns/hermes"
 	xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
 	xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
 	xmlns:xsd="http://www.w3.org/2001/XMLschema#"
@@ -253,7 +253,7 @@
 		<rdfs:range rdf:resource="&xsd;time"/>
 	</rdf:Property>
 	
-	<rdf:Property rdf:ID="stops">
+	<rdf:Property rdf:ID="steps">
 		<rdfs:comment>
 			The number of steps made by a Pedestrian for a particular date and time observed.
 		</rdfs:comment>	

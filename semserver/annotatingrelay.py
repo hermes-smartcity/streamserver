@@ -7,9 +7,9 @@ from . import annotate
 
 def main():
     buffering_time = 1000
-    src_stream_uri = 'http://itaca.gast.it.uc3m.es:9100/events/priority'
+    src_stream_uri = 'http://localhost:9100/collector/priority'
     server = StreamServer(9101)
-    annotator = annotate.DriverAnnotator()
+    annotator = annotate.HermesAnnotator()
     stream = annotate.AnnotatedRelayStream( \
                             'annotated',
                             [src_stream_uri],
