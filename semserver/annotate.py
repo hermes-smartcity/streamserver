@@ -80,6 +80,7 @@ class HermesAnnotator(GenericAnnotator):
     ns_geo = 'http://www.w3.org/2003/01/geo/wgs84_pos#'
     application_id_driver = 'SmartDriver'
     application_id_steps = 'Hermes-Citizen-Fitbit-Steps'
+    application_id_sleep = 'Hermes-Citizen-Fitbit-Sleep'
 
     def __init__(self):
         super(HermesAnnotator, self).__init__()
@@ -133,6 +134,7 @@ class HermesAnnotator(GenericAnnotator):
         self.annotation_dispatcher.update({
             HermesAnnotator.application_id_driver: self.annotate_event_driver,
             HermesAnnotator.application_id_steps: self.annotate_event_steps,
+            HermesAnnotator.application_id_sleep: self.annotate_event_sleep,
         })
         self.classes_driver = {
             'Average Speed Section': 'Speed',
@@ -245,6 +247,9 @@ class HermesAnnotator(GenericAnnotator):
                 for steps_data in data['stepsList']:
                     steps = rdflib.BNode()
                     graph.add((steps,
+                               rdflib.RDF.type,
+                               self._uri_ref('', 'Step_Set')))
+                    graph.add((steps,
                                self._uri_ref('', 'stepping_time'),
                                rdflib.Literal(steps_data['timeLog'])))
                     graph.add((steps,
@@ -254,8 +259,49 @@ class HermesAnnotator(GenericAnnotator):
                                self._uri_ref('', 'has_step_set'),
                                steps))
         except KeyError:
-            import traceback
-            print(traceback.format_exc())
+            ## import traceback
+            ## print(traceback.format_exc())
+            return [event]
+        else:
+            return [self._create_event(event, graph)]
+
+    def annotate_event_sleep(self, event):
+        if (not isinstance(event, ztreamy.events.JSONEvent)
+            or len(event.body.keys()) != 1):
+            return [event]
+        try:
+            dataset = event.body['dataset']
+            graph = self._create_graph()
+            for i, data in enumerate(dataset):
+                observation = self._uri_ref('Id-Observation',
+                                            '{}-{}'.format(event.event_id, i))
+                graph.add((observation,
+                           rdflib.RDF.type,
+                           self._uri_ref('', 'Sleep')))
+                graph.add((observation,
+                           self._uri_ref('', 'has_user'),
+                           self._uri_ref('Id-User', event.source_id)))
+                graph.add((observation,
+                           self._uri_ref('', 'awakenings'),
+                           rdflib.Literal(data['awakenings'])))
+                graph.add((observation,
+                           self._uri_ref('', 'minutes_asleep'),
+                           rdflib.Literal(data['minutesAsleep'])))
+                graph.add((observation,
+                           self._uri_ref('', 'minutes_in_bed'),
+                           rdflib.Literal(data['minutesInBed'])))
+                graph.add((observation,
+                           self._uri_ref('', 'sleeping_date'),
+                           rdflib.Literal(data['dateTime'])))
+                graph.add((observation,
+                           self._uri_ref('', 'sleeping_start_time'),
+                           rdflib.Literal(data['startTime'])))
+                graph.add((observation,
+                           self._uri_ref('', 'sleeping_end_time'),
+                           rdflib.Literal(data['endTime'])))
+        except KeyError:
+            ## import traceback
+            ## print(traceback.format_exc())
             return [event]
         else:
             return [self._create_event(event, graph)]
