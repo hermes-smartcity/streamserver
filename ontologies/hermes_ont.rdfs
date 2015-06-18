@@ -88,7 +88,7 @@
 		<rdfs:subClassOf rdf:resource="&hermes;Driving"/>
 	</rdfs:Class>
 	
-	<rdfs:Class rdf:ID="Kinetics">
+	<rdfs:Class rdf:ID="Aggresiveness">
 		<rdfs:comment>
 		An Observation related to the driving agressivity, which
 		depends on the frequency and intensity of possitive
@@ -121,6 +121,13 @@
 		</rdfs:comment>				
 	</rdfs:Class>
 
+	<rdfs:Class rdf:ID="Sleep">
+		<rdfs:comment>
+		An event registered by a user's Fitbit device	when user is asleep or sleeping.
+		</rdfs:comment>		
+		<rdfs:subClassOf rdf:resource="&hermes;Observation"/>
+	</rdfs:Class>
+
 
 	<!------------------------ PROPERTIES -------------->
 	
@@ -146,18 +153,10 @@
 			The owner of the the Fitbit device.
 		</rdfs:comment>	
 		<rdfs:subPropertyOf rdf:resource="&hermes;has_user"/>
-		<rdfs:domain rdf:resource="#Stepping">
+		<rdfs:domain rdf:resource="#Stepping">		
 		<rdfs:range rdf:resource="#Pedestrian"/>
 	</rdf:Property>
-	
-	<rdf:Property rdf:ID="uri">
-		<rdfs:comment>
-		This property can take the values N, NE, E, S, ES, SW, W or WN.
-		</rdfs:comment>
-		<rdfs:domain rdf:resource="#Observation">
-		<rdf:range rdf:resource="&rdf;Literal">
-	</rdf:Property>
-	
+		
 	<rdf:Property rdf:ID="orientation">
 		<rdfs:comment>
 		This property can take the values N, NE, E, S, ES, SW, W or WN.
@@ -180,33 +179,54 @@
 		<rdfs:comment>
 		The distance - in meters - of the section or path completed.
 		</rdfs:comment>	
-		<rdfs:domain rdf:resource="#SectionDriving">
+		<rdfs:domain rdf:resource="#Driving">
 		<rdfs:range rdf:resource="&xsd;float"/>
 	</rdf:Property>
-	
-	<rdf:Property rdf:ID="speed_value">
+		
+	<rdf:Property rdf:ID="average_speed">
 		<rdfs:comment>
-			The speed in km/h.
+			The average speed value in a completed path, in km/h.
 		</rdfs:comment>	
 		<rdfs:domain rdf:resource="#Speed">
 		<rdfs:range rdf:resource="&xsd;float"/>
 	</rdf:Property>
 	
-	<rdf:Property rdf:ID="speed_type">
+	<rdf:Property rdf:ID="deviation_speed">
 		<rdfs:comment>
-			The kind of speed the Driving Observation have obtained.
-			It can take the values: 
-			- "deviation", for the standard deviation speed;
-			- "average", for the average speed;
-			- "low" or "high", for inefficient speed observed.
+			The standard deviation speed value in a completed path, in km/h.
+		</rdfs:comment>	
+		<rdfs:domain rdf:resource="#Speed">
+		<rdfs:range rdf:resource="&xsd;float"/>
+	</rdf:Property>
+	
+	<rdf:Property rdf:ID="inefficient_speed">
+		<rdfs:comment>
+			The level of speed inefficiency in a completed path, which can take the values "low" or "high".
 		</rdfs:comment>	
 		<rdfs:domain rdf:resource="#Speed">
 		<rdfs:range rdf:resource="&rdf;Literal"/>
 	</rdf:Property>
-	
-	<rdf:Property rdf:ID="bpm">
+		
+	<rdf:Property rdf:ID="normal_bpm">
 		<rdfs:comment>
-			The beats per minute of a driver, in b/min.
+			The beats per minute - heart rate - of a driver in a completed path, in b/min.
+		</rdfs:comment>	
+		<rdfs:domain rdf:resource="#Heart_Rate">
+		<rdfs:range rdf:resource="&xsd;nonNegativeInteger"/>
+	</rdf:Property>
+	
+	<rdf:Property rdf:ID="deviation_bpm">
+		<rdfs:comment>
+			The standard deviation rate of beats per minute in a 
+			completed path, in b/min.
+		</rdfs:comment>	
+		<rdfs:domain rdf:resource="#Heart_Rate">
+		<rdfs:range rdf:resource="&xsd;nonNegativeInteger"/>
+	</rdf:Property>
+	
+	<rdf:Property rdf:ID="unexpected_bpm">
+		<rdfs:comment>
+			An unexpected high heart rate in a driver, in b/min.
 		</rdfs:comment>	
 		<rdfs:domain rdf:resource="#Heart_Rate">
 		<rdfs:range rdf:resource="&xsd;nonNegativeInteger"/>
@@ -220,9 +240,12 @@
 		<rdfs:range rdf:resource="&xsd;nonNegativeInteger"/>
 	</rdf:Property>	
 	
-	<rdf:Property rdf:ID="energy">
+	<rdf:Property rdf:ID="positive_kinetic_energy">
 		<rdfs:comment>
-			The positive kinetic energy value, in m/s2 -same as acceleration-.
+			An eco-driving value used to measure the driving 
+			aggresivity. It is obtained through the frequency of 
+			possitive accelerations. It is measured in m/s2 
+			- same as acceleration -.
 		</rdfs:comment>	
 		<rdfs:domain rdf:resource="#Kinetics">
 		<rdfs:range rdf:resource="&xsd;float"/>
@@ -237,17 +260,17 @@
 		<rdfs:range rdf:resource="&xsd;float"/>
 	</rdf:Property>
 	
-	<rdf:Property rdf:ID="on_date">
+	<rdf:Property rdf:ID="stepping_date">
 		<rdfs:comment>
-		The day -yyyy/mm/dd- of the observed stepping.
+		The day -yyyy/mm/dd- of the observed Stepping.
 		</rdfs:comment>	
 		<rdfs:domain rdf:resource="#Stepping">
 		<rdfs:range rdf:resource="&xsd;date"/>
 	</rdf:Property>
 	
-	<rdf:Property rdf:ID="at_time">
+	<rdf:Property rdf:ID="stepping_time">
 		<rdfs:comment>
-		The time -hh:mm:ss- of the observed stepping set.
+		The time -hh:mm:ss- of the observed Stepping set.
 		</rdfs:comment>	
 		<rdfs:domain rdf:resource="#Step_Set">
 		<rdfs:range rdf:resource="&xsd;time"/>
@@ -255,7 +278,8 @@
 	
 	<rdf:Property rdf:ID="steps">
 		<rdfs:comment>
-			The number of steps made by a Pedestrian for a particular date and time observed.
+			The number of steps made by a Pedestrian for a 
+			particular date and time observed.
 		</rdfs:comment>	
 		<rdfs:domain rdf:resource="#Step_Set">
 		<rdfs:range rdf:resource="&xsd;nonNegativeInteger"/>
@@ -263,10 +287,61 @@
 	
 	<rdf:Property rdf:ID="has_step_set">
 		<rdfs:comment>
-			The set of steps observed in a particular date and time.
+			The set of steps observed in a particular datetime.
 		</rdfs:comment>			
 		<rdfs:domain rdf:resource="#Stepping">
 		<rdfs:range rdf:resource="#Step_Set"/>
+	</rdf:Property>
+	
+	<rdf:Property rdf:ID="awakenings">
+		<rdfs:comment>
+			The number of awakenings made by a User for a 
+			particular date and time observed.
+		</rdfs:comment>	
+		<rdfs:domain rdf:resource="#Sleep">
+		<rdfs:range rdf:resource="&xsd;nonNegativeInteger"/>
+	</rdf:Property>
+	
+	<rdf:Property rdf:ID="minutes_asleep">
+		<rdfs:comment>
+			The number of minutes a User is asleep for a 
+			particular date and time observed.
+		</rdfs:comment>	
+		<rdfs:domain rdf:resource="#Sleep">
+		<rdfs:range rdf:resource="&xsd;nonNegativeInteger"/>
+	</rdf:Property>
+	
+	<rdf:Property rdf:ID="minutes_in_bed">
+		<rdfs:comment>
+			The number of minutes a User is in bed for a 
+			particular date and time observed.
+		</rdfs:comment>	
+		<rdfs:domain rdf:resource="#Sleep">
+		<rdfs:range rdf:resource="&xsd;nonNegativeInteger"/>
+	</rdf:Property>
+	
+	<rdf:Property rdf:ID="sleeping_date">
+		<rdfs:comment>
+		The day -yyyy/mm/dd- of the Sleep Observation.
+		</rdfs:comment>	
+		<rdfs:domain rdf:resource="#Sleep">
+		<rdfs:range rdf:resource="&xsd;date"/>
+	</rdf:Property>
+	
+	<rdf:Property rdf:ID="sleeping_start_time">
+		<rdfs:comment>
+		The start time -hh:mm:ss- of the observed Sleep.
+		</rdfs:comment>	
+		<rdfs:domain rdf:resource="#Sleep">
+		<rdfs:range rdf:resource="&xsd;time"/>
+	</rdf:Property>
+	
+	<rdf:Property rdf:ID="sleeping_end_time">
+		<rdfs:comment>
+		The end time -hh:mm:ss- of the observed Sleep.
+		</rdfs:comment>	
+		<rdfs:domain rdf:resource="#Sleep">
+		<rdfs:range rdf:resource="&xsd;time"/>
 	</rdf:Property>
 	
 </rdf:RDF>
