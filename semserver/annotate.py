@@ -78,7 +78,8 @@ class HermesAnnotator(GenericAnnotator):
 
     ns_hermes = 'http://webtlab.it.uc3m.es/ns/hermes#'
     ns_geo = 'http://www.w3.org/2003/01/geo/wgs84_pos#'
-    application_id = 'SmartDriver'
+    application_id_driver = 'SmartDriver'
+    application_id_steps = 'Hermes-Citizen-Fitbit-Steps'
 
     def __init__(self):
         super(HermesAnnotator, self).__init__()
@@ -120,9 +121,11 @@ class HermesAnnotator(GenericAnnotator):
             ('geo', 'lat'),
             ('geo', 'long'),
         ])
-        self.annotation_dispatcher[HermesAnnotator.application_id] = \
-            self.annotate_event_driver
-        self.classes = {
+        self.annotation_dispatcher.update({
+            HermesAnnotator.application_id_driver: self.annotate_event_driver,
+            HermesAnnotator.application_id_steps: self.annotate_event_steps,
+        })
+        self.classes_driver = {
             'Average Speed Section': 'Speed',
             'Standard Deviation of Vehicle Speed Section': 'Speed',
             'Inefficient Speed Section': 'Speed',
@@ -138,7 +141,7 @@ class HermesAnnotator(GenericAnnotator):
     def annotate_event_driver(self, event):
         if (not isinstance(event, ztreamy.events.JSONEvent)
             or len(event.body.keys()) != 1
-            or list(event.body.keys())[0] not in self.classes):
+            or list(event.body.keys())[0] not in self.classes_driver):
             return [event]
         top_key = list(event.body.keys())[0]
         data = event.body[top_key]
@@ -146,7 +149,7 @@ class HermesAnnotator(GenericAnnotator):
         observation = self._uri_ref('Id-Observation', event.event_id)
         graph.add((observation,
                    rdflib.RDF.type,
-                   self._uri_ref('', self.classes[top_key])))
+                   self._uri_ref('', self.classes_driver[top_key])))
         graph.add((observation,
                    self._uri_ref('', 'has_driver'),
                    self._uri_ref('Id-User', event.source_id)))
@@ -213,6 +216,43 @@ class HermesAnnotator(GenericAnnotator):
         else:
             raise ValueError('Unhandled key: ' + top_key)
         return [self._create_event(event, graph)]
+
+    def annotate_event_steps(self, event):
+        if (not isinstance(event, ztreamy.events.JSONEvent)
+            or len(event.body.keys()) != 1):
+            return [event]
+        try:
+            dataset = event.body['dataset']
+            graph = self._create_graph()
+            for i, data in enumerate(dataset):
+                observation = self._uri_ref('Id-Observation',
+                                            '{}-{}'.format(event.event_id, i))
+                graph.add((observation,
+                           rdflib.RDF.type,
+                           self._uri_ref('', 'Stepping')))
+                graph.add((observation,
+                           self._uri_ref('', 'has_pedestrian'),
+                           self._uri_ref('Id-User', event.source_id)))
+                graph.add((observation,
+                           self._uri_ref('', 'on_date'),
+                           rdflib.Literal(data['dateTime'])))
+                for steps_data in data['stepsList']:
+                    steps = rdflib.BNode()
+                    graph.add((steps,
+                               self._uri_ref('', 'at_time'),
+                               rdflib.Literal(steps_data['timeLog'])))
+                    graph.add((steps,
+                               self._uri_ref('', 'steps'),
+                               rdflib.Literal(steps_data['steps'])))
+                    graph.add((observation,
+                               self._uri_ref('', 'has_step_set'),
+                               steps))
+        except KeyError:
+            import traceback
+            print(traceback.format_exc())
+            return [event]
+        else:
+            return [self._create_event(event, graph)]
 
 
 class AnnotatedStream(ztreamy.server.Stream):
