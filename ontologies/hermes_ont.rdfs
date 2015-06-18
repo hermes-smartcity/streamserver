@@ -72,14 +72,6 @@
 		<rdfs:subClassOf rdf:resource="&hermes;Driving"/>
 	</rdfs:Class>
 	
-	<rdfs:Class rdf:ID="High_Heart_Rate">
-		<rdfs:comment>
-		An Observation related to a driver pulse when unexpected.
-		It does not advise about the distance of the path.
-		</rdfs:comment>		
-		<rdfs:subClassOf rdf:resource="&hermes;Heart_Rate"/>
-	</rdfs:Class>
-	
 	<rdfs:Class rdf:ID="Stopping">
 		<rdfs:comment>
 		An Observation related to the number of stops in a completed 

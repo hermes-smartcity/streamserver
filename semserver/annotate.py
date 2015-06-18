@@ -95,28 +95,37 @@ class HermesAnnotator(GenericAnnotator):
             ('', 'Driving'),
             ('', 'Speed'),
             ('', 'Heart_Rate'),
-            ('', 'High_Heart_Rate'),
             ('', 'Stopping'),
-            ('', 'Kinetics'),
+            ('', 'Agressiveness'),
             ('', 'Acceleration'),
             ('', 'Stepping'),
             ('', 'Step_Set'),
+            ('', 'Sleep'),
             ('', 'has_user'),
             ('', 'has_driver'),
             ('', 'has_pedestrian'),
             ('', 'orientation'),
             ('', 'has_location'),
             ('', 'completed_distance'),
-            ('', 'speed_value'),
-            ('', 'speed_type'),
-            ('', 'bpm'),
+            ('', 'average_speed'),
+            ('', 'deviation_speed'),
+            ('', 'inefficient_speed'),
+            ('', 'normal_bpm'),
+            ('', 'deviation_bpm'),
+            ('', 'unexpected_bpm'),
             ('', 'stops'),
-            ('', 'energy'),
+            ('', 'positive_kinetic_energy'),
             ('', 'acceleration'),
-            ('', 'on_date'),
-            ('', 'at_time'),
+            ('', 'stepping_date'),
+            ('', 'stepping_time'),
             ('', 'steps'),
             ('', 'has_step_set'),
+            ('', 'awakenings'),
+            ('', 'minutes_asleep'),
+            ('', 'minutes_in_bed'),
+            ('', 'sleeping_date'),
+            ('', 'sleeping_start_time'),
+            ('', 'sleeping_end_time'),
             ('geo', 'SpatialThing'),
             ('geo', 'lat'),
             ('geo', 'long'),
@@ -131,9 +140,9 @@ class HermesAnnotator(GenericAnnotator):
             'Inefficient Speed Section': 'Speed',
             'Heart Rate Section': 'Heart_Rate',
             'Standard Deviation Heart Rate Section': 'Heart_Rate',
-            'High Heart Rate': 'High_Heart_Rate',
+            'High Heart Rate': 'Heart_Rate',
             'Stops Section': 'Stopping',
-            'Positive Kinetic Energy': 'Kinetics',
+            'Positive Kinetic Energy': 'Agressiveness',
             'High Acceleration': 'Acceleration',
             'High Deceleration': 'Acceleration',
         }
@@ -175,30 +184,27 @@ class HermesAnnotator(GenericAnnotator):
                        rdflib.Literal(data['distancia'])))
         if top_key == 'Average Speed Section':
             graph.add((observation,
-                       self._uri_ref('', 'speed_value'),
+                       self._uri_ref('', 'average_speed'),
                        rdflib.Literal(data['value'])))
-            graph.add((observation,
-                       self._uri_ref('', 'speed_type'),
-                       rdflib.Literal('average')))
         elif top_key == 'Standard Deviation of Vehicle Speed Section':
             graph.add((observation,
-                       self._uri_ref('', 'speed_value'),
+                       self._uri_ref('', 'deviation_speed'),
                        rdflib.Literal(data['value'])))
-            graph.add((observation,
-                       self._uri_ref('', 'speed_type'),
-                       rdflib.Literal('deviation')))
         elif top_key == 'Inefficient Speed Section':
             graph.add((observation,
-                       self._uri_ref('', 'speed_type'),
+                       self._uri_ref('', 'inefficient_speed'),
                        rdflib.Literal(data['value'])))
-        elif (top_key == 'Heart Rate Section'
-              or top_key == 'High Heart Rate'):
+        elif top_key == 'Heart Rate Section':
             graph.add((observation,
-                       self._uri_ref('', 'bpm'),
+                       self._uri_ref('', 'normal_bpm'),
+                       rdflib.Literal(data['value'])))
+        elif top_key == 'High Heart Rate':
+            graph.add((observation,
+                       self._uri_ref('', 'unexpected_bpm'),
                        rdflib.Literal(data['value'])))
         elif top_key == 'Standard Deviation Heart Rate Section':
             graph.add((observation,
-                       self._uri_ref('', 'bpm'),
+                       self._uri_ref('', 'deviation_bpm'),
                        rdflib.Literal(data['value'])))
         elif top_key == 'Stops Section':
             graph.add((observation,
@@ -206,7 +212,7 @@ class HermesAnnotator(GenericAnnotator):
                        rdflib.Literal(data['value'])))
         elif top_key == 'Positive Kinetic Energy':
             graph.add((observation,
-                       self._uri_ref('', 'energy'),
+                       self._uri_ref('', 'positive_kinetic_energy'),
                        rdflib.Literal(data['value'])))
         elif (top_key == 'High Acceleration'
             or top_key == 'High Deceleration'):
@@ -234,12 +240,12 @@ class HermesAnnotator(GenericAnnotator):
                            self._uri_ref('', 'has_pedestrian'),
                            self._uri_ref('Id-User', event.source_id)))
                 graph.add((observation,
-                           self._uri_ref('', 'on_date'),
+                           self._uri_ref('', 'stepping_date'),
                            rdflib.Literal(data['dateTime'])))
                 for steps_data in data['stepsList']:
                     steps = rdflib.BNode()
                     graph.add((steps,
-                               self._uri_ref('', 'at_time'),
+                               self._uri_ref('', 'stepping_time'),
                                rdflib.Literal(steps_data['timeLog'])))
                     graph.add((steps,
                                self._uri_ref('', 'steps'),
