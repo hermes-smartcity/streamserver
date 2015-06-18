@@ -149,6 +149,14 @@
 		<rdfs:range rdf:resource="#Pedestrian"/>
 	</rdf:Property>
 		
+	<rdf:Property rdf:ID="happens_at_timestamp">
+		<rdfs:comment>
+			A Driving observation happens at a given timestamp.
+		</rdfs:comment>	
+		<rdfs:domain rdf:resource="#Driving">
+		<rdfs:range rdf:resource="&xsd;dateTime"/>
+	</rdf:Property>
+	
 	<rdf:Property rdf:ID="orientation">
 		<rdfs:comment>
 		This property can take the values N, NE, E, S, ES, SW, W or WN.
@@ -172,7 +180,7 @@
 		The distance - in meters - of the section or path completed.
 		</rdfs:comment>	
 		<rdfs:domain rdf:resource="#Driving">
-		<rdfs:range rdf:resource="&xsd;float"/>
+		<rdfs:range rdf:resource="&xsd;double"/>
 	</rdf:Property>
 		
 	<rdf:Property rdf:ID="average_speed">
@@ -180,7 +188,7 @@
 			The average speed value in a completed path, in km/h.
 		</rdfs:comment>	
 		<rdfs:domain rdf:resource="#Speed">
-		<rdfs:range rdf:resource="&xsd;float"/>
+		<rdfs:range rdf:resource="&xsd;double"/>
 	</rdf:Property>
 	
 	<rdf:Property rdf:ID="deviation_speed">
@@ -188,7 +196,7 @@
 			The standard deviation speed value in a completed path, in km/h.
 		</rdfs:comment>	
 		<rdfs:domain rdf:resource="#Speed">
-		<rdfs:range rdf:resource="&xsd;float"/>
+		<rdfs:range rdf:resource="&xsd;double"/>
 	</rdf:Property>
 	
 	<rdf:Property rdf:ID="inefficient_speed">
@@ -204,7 +212,7 @@
 			The beats per minute - heart rate - of a driver in a completed path, in b/min.
 		</rdfs:comment>	
 		<rdfs:domain rdf:resource="#Heart_Rate">
-		<rdfs:range rdf:resource="&xsd;nonNegativeInteger"/>
+		<rdfs:range rdf:resource="&xsd;double"/>
 	</rdf:Property>
 	
 	<rdf:Property rdf:ID="deviation_bpm">
@@ -213,7 +221,7 @@
 			completed path, in b/min.
 		</rdfs:comment>	
 		<rdfs:domain rdf:resource="#Heart_Rate">
-		<rdfs:range rdf:resource="&xsd;nonNegativeInteger"/>
+		<rdfs:range rdf:resource="&xsd;double"/>
 	</rdf:Property>
 	
 	<rdf:Property rdf:ID="unexpected_bpm">
@@ -221,7 +229,7 @@
 			An unexpected high heart rate in a driver, in b/min.
 		</rdfs:comment>	
 		<rdfs:domain rdf:resource="#Heart_Rate">
-		<rdfs:range rdf:resource="&xsd;nonNegativeInteger"/>
+		<rdfs:range rdf:resource="&xsd;double"/>
 	</rdf:Property>
 	
 	<rdf:Property rdf:ID="stops">
@@ -240,7 +248,7 @@
 			- same as acceleration -.
 		</rdfs:comment>	
 		<rdfs:domain rdf:resource="#Kinetics">
-		<rdfs:range rdf:resource="&xsd;float"/>
+		<rdfs:range rdf:resource="&xsd;double"/>
 	</rdf:Property>
 	
 	<rdf:Property rdf:ID="acceleration">
@@ -249,7 +257,7 @@
 			It refers to a deceleration when its value is less than 0.
 		</rdfs:comment>	
 		<rdfs:domain rdf:resource="#Acceleration">
-		<rdfs:range rdf:resource="&xsd;float"/>
+		<rdfs:range rdf:resource="&xsd;double"/>
 	</rdf:Property>
 	
 	<rdf:Property rdf:ID="stepping_date">

@@ -1,8 +1,9 @@
 from __future__ import unicode_literals, print_function
 
-import rdflib
-from rdflib.namespace import NamespaceManager
+import re
 
+import rdflib
+from rdflib.namespace import NamespaceManager, XSD
 import ztreamy.events
 import ztreamy.server
 import ztreamy.rdfevents
@@ -162,6 +163,10 @@ class HermesAnnotator(GenericAnnotator):
                    rdflib.RDF.type,
                    self._uri_ref('', self.classes_driver[top_key])))
         graph.add((observation,
+                   self._uri_ref('', 'happens_at_timestamp'),
+                   rdflib.Literal(event.timestamp,
+                                  datatype=XSD.timestamp)))
+        graph.add((observation,
                    self._uri_ref('', 'has_driver'),
                    self._uri_ref('Id-User', event.source_id)))
         graph.add((observation,
@@ -183,7 +188,8 @@ class HermesAnnotator(GenericAnnotator):
         if 'distancia' in data:
             graph.add((observation,
                        self._uri_ref('', 'completed_distance'),
-                       rdflib.Literal(data['distancia'])))
+                       rdflib.Literal(data['distancia'], normalize=False,
+                                      datatype=XSD.double)))
         if top_key == 'Average Speed Section':
             graph.add((observation,
                        self._uri_ref('', 'average_speed'),
@@ -211,7 +217,7 @@ class HermesAnnotator(GenericAnnotator):
         elif top_key == 'Stops Section':
             graph.add((observation,
                        self._uri_ref('', 'stops'),
-                       rdflib.Literal(data['value'])))
+                       rdflib.Literal(int(data['value']))))
         elif top_key == 'Positive Kinetic Energy':
             graph.add((observation,
                        self._uri_ref('', 'positive_kinetic_energy'),
@@ -243,7 +249,8 @@ class HermesAnnotator(GenericAnnotator):
                            self._uri_ref('Id-User', event.source_id)))
                 graph.add((observation,
                            self._uri_ref('', 'stepping_date'),
-                           rdflib.Literal(data['dateTime'])))
+                           rdflib.Literal(_to_xsd_date(data['dateTime']),
+                                          datatype=XSD.date)))
                 for steps_data in data['stepsList']:
                     steps = rdflib.BNode()
                     graph.add((steps,
@@ -251,7 +258,8 @@ class HermesAnnotator(GenericAnnotator):
                                self._uri_ref('', 'Step_Set')))
                     graph.add((steps,
                                self._uri_ref('', 'stepping_time'),
-                               rdflib.Literal(steps_data['timeLog'])))
+                               rdflib.Literal(steps_data['timeLog'],
+                                              datatype=XSD.time)))
                     graph.add((steps,
                                self._uri_ref('', 'steps'),
                                rdflib.Literal(steps_data['steps'])))
@@ -292,13 +300,16 @@ class HermesAnnotator(GenericAnnotator):
                            rdflib.Literal(data['minutesInBed'])))
                 graph.add((observation,
                            self._uri_ref('', 'sleeping_date'),
-                           rdflib.Literal(data['dateTime'])))
+                           rdflib.Literal(_to_xsd_date(data['dateTime']),
+                                          datatype=XSD.date)))
                 graph.add((observation,
                            self._uri_ref('', 'sleeping_start_time'),
-                           rdflib.Literal(data['startTime'])))
+                           rdflib.Literal(data['startTime'],
+                                          datatype=XSD.time)))
                 graph.add((observation,
                            self._uri_ref('', 'sleeping_end_time'),
-                           rdflib.Literal(data['endTime'])))
+                           rdflib.Literal(data['endTime'],
+                                          datatype=XSD.time)))
         except KeyError:
             ## import traceback
             ## print(traceback.format_exc())
@@ -319,3 +330,13 @@ class AnnotatedRelayStream(ztreamy.server.RelayStream):
         kwargs['event_adapter'] = annotator.annotate_events
         kwargs['parse_event_body'] = True
         super(AnnotatedRelayStream, self).__init__(path, streams, **kwargs)
+
+
+def _to_xsd_date(date):
+    """Converts a date DD/MM/YYYY to xsd:date (YYYY-MM-DD)."""
+    if _re_hermes_date.match(date):
+        return _re_hermes_date.sub(r'\3-\2-\1', date)
+    else:
+        raise ValueError('Wrong date format')
+
+_re_hermes_date = re.compile(r'^(\d\d)/(\d\d)/(\d\d\d\d)$')
