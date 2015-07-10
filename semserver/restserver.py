@@ -83,7 +83,7 @@ class LatestDataHandler(tornado.web.RequestHandler):
 
 
 def _read_cmd_options():
-    from optparse import OptionParser, Values
+    from optparse import Values
     import tornado.options
     tornado.options.define('port', default=9101, help='run on the given port',
                            type=int)
@@ -92,7 +92,7 @@ def _read_cmd_options():
     if len(remaining) >= 1:
         options.stream_urls = remaining
     else:
-        OptionParser().error('At least one source stream URL required')
+        options.stream_urls = ['http://localhost:9100/collector/compressed']
     return options
 
 def main():

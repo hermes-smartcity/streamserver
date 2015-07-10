@@ -58,16 +58,37 @@ class LogDataScheduler(object):
         file_.close()
 
 
+def _read_cmd_options():
+    from optparse import Values
+    import tornado.options
+    tornado.options.define('port',
+                           default=9102,
+                           help='run on the given port',
+                           type=int)
+    tornado.options.define('buffer',
+                           default=10.0,
+                           help='event buffer time (s)',
+                           type=float)
+    remaining = tornado.options.parse_command_line()
+    options = Values()
+    if len(remaining) >= 1:
+        options.stream_urls = remaining
+    else:
+        options.stream_urls = ['http://localhost:9100/collector/compressed']
+    return options
 
 def main():
-    buffering_time = 1000
-    src_stream_uri = 'http://localhost:9100/collector/compressed'
-    server = ztreamy.StreamServer(9102)
+    import tornado.options
+    options = _read_cmd_options()
+    buffering_time = tornado.options.options.buffer * 1000
+    port = tornado.options.options.port
+    src_stream_urls = options.stream_urls
+    server = ztreamy.StreamServer(port)
     stream = ztreamy.RelayStream('dbfeed',
-                                 [src_stream_uri],
+                                 src_stream_urls,
                                  buffering_time=buffering_time)
     test_stream = ztreamy.RelayStream('dbfeed-test',
-                                 [src_stream_uri],
+                                 src_stream_urls,
                                  buffering_time=buffering_time)
     server.add_stream(stream)
     server.add_stream(test_stream)
