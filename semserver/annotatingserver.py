@@ -9,20 +9,17 @@ from . import annotate
 def main():
     tornado.options.define('port', default=9100, help='run on the given port',
                            type=int)
-    tornado.options.define('name', default='events',
-                           help='stream name')
-    tornado.options.define('buffer', default=None, help='event buffer time (s)',
+    tornado.options.define('buffer', default=2.0, help='event buffer time (s)',
                            type=float)
     tornado.options.parse_command_line()
     port = tornado.options.options.port
-    stream_name = tornado.options.options.name
     if (tornado.options.options.buffer is not None
         and tornado.options.options.buffer > 0):
         buffering_time = tornado.options.options.buffer * 1000
     else:
         buffering_time = None
     server = ztreamy.StreamServer(port)
-    collector_stream = ztreamy.Stream(stream_name,
+    collector_stream = ztreamy.Stream('collector',
                                       parse_event_body=True,
                                       buffering_time=buffering_time,
                                       allow_publish=True)
