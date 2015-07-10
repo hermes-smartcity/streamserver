@@ -11,8 +11,11 @@ def main():
                            type=int)
     tornado.options.define('buffer', default=2.0, help='event buffer time (s)',
                            type=float)
+    tornado.options.define('preload', default=None,
+                           help='preload events from file')
     tornado.options.parse_command_line()
     port = tornado.options.options.port
+    preload_file = tornado.options.options.preload
     if (tornado.options.options.buffer is not None
         and tornado.options.options.buffer > 0):
         buffering_time = tornado.options.options.buffer * 1000
@@ -23,6 +26,9 @@ def main():
                                       parse_event_body=True,
                                       buffering_time=buffering_time,
                                       allow_publish=True)
+    if preload_file:
+        with open(preload_file, 'rb') as f:
+            collector_stream.preload_recent_events_buffer_from_file(f)
     annotator = annotate.HermesAnnotator()
     annotated_stream = annotate.AnnotatedRelayStream( \
                                         'annotated',
