@@ -52,7 +52,8 @@
 		<rdfs:subClassOf rdf:resource="&hermes;Observation"/>
 	</rdfs:Class>
 	
-	<!--NOTE: The distinction of the two types of events does not make 
+	<!--NOTE: The distinction of the two types of events 
+	- expected and unexpected - does not make 
 	sense in this representational level - it's an issue related to the 
 	application, 'when' an observation is triggered-. 
 	However, depending on the observation, we want to know the 
@@ -67,7 +68,7 @@
 	
 	<rdfs:Class rdf:ID="Heart_Rate">
 		<rdfs:comment>
-		An Observation related to a driver pulse.
+		An Observation related to the driver's pulse.
 		</rdfs:comment>		
 		<rdfs:subClassOf rdf:resource="&hermes;Driving"/>
 	</rdfs:Class>
@@ -101,7 +102,8 @@
 	
 	<rdfs:Class rdf:ID="Stepping">
 		<rdfs:comment>
-		An event registered by a user's Fitbit device	while walking -or running-.
+		An event registered by a user's Fitbit device	while walking 
+		-or running-.
 		</rdfs:comment>		
 		<rdfs:subClassOf rdf:resource="&hermes;Observation"/>
 	</rdfs:Class>
@@ -115,11 +117,25 @@
 
 	<rdfs:Class rdf:ID="Sleep">
 		<rdfs:comment>
-		An event registered by a user's Fitbit device	when user is asleep or sleeping.
+		An event registered by a user's Fitbit device	when user is 
+		asleep or sleeping.
 		</rdfs:comment>		
 		<rdfs:subClassOf rdf:resource="&hermes;Observation"/>
 	</rdfs:Class>
 
+	<rdfs:Class rdf:ID="Heart_Frequency">
+		<rdfs:comment>
+		An event registered by a user's Fitbit device	during a day 
+		related to their hear rate.
+		</rdfs:comment>		
+		<rdfs:subClassOf rdf:resource="&hermes;Observation"/>
+	</rdfs:Class>
+
+	<rdfs:Class rdf:ID="Heart_Set">
+		<rdfs:comment>
+		The set of heart frequencies collected with the Fitbit device.
+		</rdfs:comment>				
+	</rdfs:Class>
 
 	<!------------------------ PROPERTIES -------------->
 	
@@ -247,7 +263,7 @@
 			possitive accelerations. It is measured in m/s2 
 			- same as acceleration -.
 		</rdfs:comment>	
-		<rdfs:domain rdf:resource="#Kinetics">
+		<rdfs:domain rdf:resource="#Aggresiveness">
 		<rdfs:range rdf:resource="&xsd;double"/>
 	</rdf:Property>
 	
@@ -342,6 +358,39 @@
 		</rdfs:comment>	
 		<rdfs:domain rdf:resource="#Sleep">
 		<rdfs:range rdf:resource="&xsd;time"/>
+	</rdf:Property>
+	
+	<rdf:Property rdf:ID="heart_date">
+		<rdfs:comment>
+		The day -yyyy/mm/dd- of the observed Heart Frequency.
+		</rdfs:comment>	
+		<rdfs:domain rdf:resource="#Heart_Frequency">
+		<rdfs:range rdf:resource="&xsd;date"/>
+	</rdf:Property>
+	
+	<rdf:Property rdf:ID="heart_time">
+		<rdfs:comment>
+		The time -hh:mm:ss- of the observed Heart set.
+		</rdfs:comment>	
+		<rdfs:domain rdf:resource="#Heart_Set">
+		<rdfs:range rdf:resource="&xsd;time"/>
+	</rdf:Property>
+	
+	<rdf:Property rdf:ID="bpm">
+		<rdfs:comment>
+			The number of beats per minute of a User for a 
+			particular date and time observed.
+		</rdfs:comment>	
+		<rdfs:domain rdf:resource="#Heart_Set">
+		<rdfs:range rdf:resource="&xsd;nonNegativeInteger"/>
+	</rdf:Property>
+	
+	<rdf:Property rdf:ID="has_heart_set">
+		<rdfs:comment>
+			The set of heart frequencies observed in a particular datetime.
+		</rdfs:comment>			
+		<rdfs:domain rdf:resource="#Heart_Frequency">
+		<rdfs:range rdf:resource="#Heart_Set"/>
 	</rdf:Property>
 	
 </rdf:RDF>
