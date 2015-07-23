@@ -3,8 +3,6 @@ from __future__ import unicode_literals, print_function
 import tornado.options
 import ztreamy
 
-from . import annotate
-
 
 def main():
     tornado.options.define('port', default=9100, help='run on the given port',
@@ -29,14 +27,7 @@ def main():
     if preload_file:
         with open(preload_file, 'rb') as f:
             collector_stream.preload_recent_events_buffer_from_file(f)
-    annotator = annotate.HermesAnnotator()
-    annotated_stream = annotate.AnnotatedRelayStream( \
-                                        'annotated',
-                                        collector_stream,
-                                        annotator,
-                                        buffering_time=buffering_time)
     server.add_stream(collector_stream)
-    server.add_stream(annotated_stream)
     try:
         server.start()
     except KeyboardInterrupt:
