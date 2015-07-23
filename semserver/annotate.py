@@ -81,6 +81,7 @@ class HermesAnnotator(GenericAnnotator):
     ns_geo = 'http://www.w3.org/2003/01/geo/wgs84_pos#'
     application_id_driver = 'SmartDriver'
     application_id_steps = 'Hermes-Citizen-Fitbit-Steps'
+    application_id_heart_rate = 'Hermes-Citizen-Fitbit-HeartRate'
     application_id_sleep = 'Hermes-Citizen-Fitbit-Sleep'
 
     def __init__(self):
@@ -102,6 +103,8 @@ class HermesAnnotator(GenericAnnotator):
             ('', 'Acceleration'),
             ('', 'Stepping'),
             ('', 'Step_Set'),
+            ('', 'Heart_Frequency'),
+            ('', 'Heart_Set'),
             ('', 'Sleep'),
             ('', 'has_user'),
             ('', 'has_driver'),
@@ -122,6 +125,10 @@ class HermesAnnotator(GenericAnnotator):
             ('', 'stepping_time'),
             ('', 'steps'),
             ('', 'has_step_set'),
+            ('', 'heart_date'),
+            ('', 'heart_time'),
+            ('', 'bpm'),
+            ('', 'has_heart_set'),
             ('', 'awakenings'),
             ('', 'minutes_asleep'),
             ('', 'minutes_in_bed'),
@@ -135,6 +142,8 @@ class HermesAnnotator(GenericAnnotator):
         self.annotation_dispatcher.update({
             HermesAnnotator.application_id_driver: self.annotate_event_driver,
             HermesAnnotator.application_id_steps: self.annotate_event_steps,
+            HermesAnnotator.application_id_heart_rate: \
+                                             self.annotate_event_heart_rate,
             HermesAnnotator.application_id_sleep: self.annotate_event_sleep,
         })
         self.classes_driver = {
@@ -266,6 +275,48 @@ class HermesAnnotator(GenericAnnotator):
                     graph.add((observation,
                                self._uri_ref('', 'has_step_set'),
                                steps))
+        except KeyError:
+            ## import traceback
+            ## print(traceback.format_exc())
+            return [event]
+        else:
+            return [self._create_event(event, graph)]
+
+    def annotate_event_heart_rate(self, event):
+        if (not isinstance(event, ztreamy.events.JSONEvent)
+            or len(event.body.keys()) != 1):
+            return [event]
+        try:
+            dataset = event.body['dataset']
+            graph = self._create_graph()
+            for i, data in enumerate(dataset):
+                observation = self._uri_ref('Id-Observation',
+                                            '{}-{}'.format(event.event_id, i))
+                graph.add((observation,
+                           rdflib.RDF.type,
+                           self._uri_ref('', 'Heart_Frequency')))
+                graph.add((observation,
+                           self._uri_ref('', 'has_pedestrian'),
+                           self._uri_ref('Id-User', event.source_id)))
+                graph.add((observation,
+                           self._uri_ref('', 'heart_date'),
+                           rdflib.Literal(_to_xsd_date(data['dateTime']),
+                                          datatype=XSD.date)))
+                for heart_data in data['heartRateList']:
+                    heart = rdflib.BNode()
+                    graph.add((heart,
+                               rdflib.RDF.type,
+                               self._uri_ref('', 'Heart_Set')))
+                    graph.add((heart,
+                               self._uri_ref('', 'heart_time'),
+                               rdflib.Literal(heart_data['timeLog'],
+                                              datatype=XSD.time)))
+                    graph.add((heart,
+                               self._uri_ref('', 'bpm'),
+                               rdflib.Literal(heart_data['heartRate'])))
+                    graph.add((observation,
+                               self._uri_ref('', 'has_heart_set'),
+                               heart))
         except KeyError:
             ## import traceback
             ## print(traceback.format_exc())
