@@ -93,9 +93,9 @@ def main():
     server.add_stream(stream)
     server.add_stream(test_stream)
     debug_publisher = ztreamy.client.LocalEventPublisher(test_stream)
-    log_data_scheduler = LogDataScheduler('log-hermes-sample-4.txt.gz',
+    log_data_scheduler = LogDataScheduler('log-hermes.txt',
                                 debug_publisher,
-                                ztreamy.tools.utils.get_scheduler('exp[5.0]'))
+                                ztreamy.tools.utils.get_scheduler('exp[3.0]'))
     log_data_scheduler.schedule_next()
     try:
         server.start()
