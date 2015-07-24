@@ -21,7 +21,6 @@ def main():
         buffering_time = tornado.options.options.buffer * 1000
     else:
         buffering_time = None
-    server = ztreamy.StreamServer(port)
     src_stream_uri = 'http://localhost:9100/collector/priority'
     server = ztreamy.StreamServer(port)
     annotator = annotate.HermesAnnotator()
