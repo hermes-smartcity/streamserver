@@ -32,7 +32,7 @@ class LogDataScheduler(object):
     @staticmethod
     def _generate_from_file(filename):
         send_from_timestamp = \
-            ztreamy.rfc3339_as_time('2015-05-29T00:00:00+02:00')
+            ztreamy.rfc3339_as_time('2015-07-15T00:00:00+02:00')
         if filename.endswith('.gz'):
             file_ = gzip.GzipFile(filename, 'r')
         else:
@@ -66,9 +66,12 @@ def _read_cmd_options():
                            help='run on the given port',
                            type=int)
     tornado.options.define('buffer',
-                           default=10.0,
+                           default=2.0,
                            help='event buffer time (s)',
                            type=float)
+    tornado.options.define('distribution',
+                    default='exp[0.1]',
+                    help='event statistical distribution of the test stream')
     remaining = tornado.options.parse_command_line()
     options = Values()
     if len(remaining) >= 1:
@@ -93,9 +96,11 @@ def main():
     server.add_stream(stream)
     server.add_stream(test_stream)
     debug_publisher = ztreamy.client.LocalEventPublisher(test_stream)
+    scheduler = ztreamy.tools.utils.get_scheduler( \
+                                    tornado.options.options.distribution)
     log_data_scheduler = LogDataScheduler('log-hermes.txt',
-                                debug_publisher,
-                                ztreamy.tools.utils.get_scheduler('exp[3.0]'))
+                                          debug_publisher,
+                                          scheduler)
     log_data_scheduler.schedule_next()
     try:
         server.start()
