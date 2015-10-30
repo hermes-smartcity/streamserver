@@ -31,8 +31,10 @@ class LogDataScheduler(object):
 
     @staticmethod
     def _generate_from_file(filename):
-        send_from_timestamp = \
-            ztreamy.rfc3339_as_time('2015-09-01T00:00:00+02:00')
+        send_from_timestamp_citizen = \
+            ztreamy.rfc3339_as_time('2015-10-29T00:00:00+02:00')
+        send_from_timestamp_driver = \
+            ztreamy.rfc3339_as_time('2015-10-29T00:00:00+02:00')
         if filename.endswith('.gz'):
             file_ = gzip.GzipFile(filename, 'r')
         else:
@@ -50,7 +52,13 @@ class LogDataScheduler(object):
                 except ztreamy.ZtreamyException:
                     send = False
                 else:
-                    send = t > send_from_timestamp
+                    if event.application_id.startswith('Hermes-Citizen-'):
+                        send = t > send_from_timestamp_citizen
+                    elif (event.application_id.startswith('SmartDriver')
+                          and event.event_type):
+                        send = t > send_from_timestamp_driver
+                    else:
+                        send = False
                 if send:
                     event.timestamp = ztreamy.get_timestamp()
                     event.event_id = ztreamy.random_id()
