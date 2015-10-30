@@ -32,7 +32,7 @@ class LogDataScheduler(object):
     @staticmethod
     def _generate_from_file(filename):
         send_from_timestamp = \
-            ztreamy.rfc3339_as_time('2015-07-15T00:00:00+02:00')
+            ztreamy.rfc3339_as_time('2015-09-01T00:00:00+02:00')
         if filename.endswith('.gz'):
             file_ = gzip.GzipFile(filename, 'r')
         else:
