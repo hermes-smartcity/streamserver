@@ -34,7 +34,7 @@ class LogDataScheduler(object):
         send_from_timestamp_citizen = \
             ztreamy.rfc3339_as_time('2015-10-29T00:00:00+02:00')
         send_from_timestamp_driver = \
-            ztreamy.rfc3339_as_time('2015-10-29T00:00:00+02:00')
+            ztreamy.rfc3339_as_time('2015-11-09T00:00:00+02:00')
         if filename.endswith('.gz'):
             file_ = gzip.GzipFile(filename, 'r')
         else:
