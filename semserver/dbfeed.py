@@ -32,9 +32,9 @@ class LogDataScheduler(object):
     @staticmethod
     def _generate_from_file(filename):
         send_from_timestamp_citizen = \
-            ztreamy.rfc3339_as_time('2015-10-29T00:00:00+02:00')
+            ztreamy.rfc3339_as_time('2015-11-18T17:00:00+02:00')
         send_from_timestamp_driver = \
-            ztreamy.rfc3339_as_time('2015-11-09T00:00:00+02:00')
+            ztreamy.rfc3339_as_time('2019-11-09T00:00:00+02:00')
         if filename.endswith('.gz'):
             file_ = gzip.GzipFile(filename, 'r')
         else:
@@ -80,6 +80,9 @@ def _read_cmd_options():
     tornado.options.define('distribution',
                     default='exp[0.1]',
                     help='event statistical distribution of the test stream')
+    tornado.options.define('testfile',
+                           default='log-hermes.txt',
+                           help='load test data from this file path')
     remaining = tornado.options.parse_command_line()
     options = Values()
     if len(remaining) >= 1:
@@ -106,7 +109,7 @@ def main():
     debug_publisher = ztreamy.client.LocalEventPublisher(test_stream)
     scheduler = ztreamy.tools.utils.get_scheduler( \
                                     tornado.options.options.distribution)
-    log_data_scheduler = LogDataScheduler('log-hermes.txt',
+    log_data_scheduler = LogDataScheduler(tornado.options.options.testfile,
                                           debug_publisher,
                                           scheduler)
     log_data_scheduler.schedule_next()
