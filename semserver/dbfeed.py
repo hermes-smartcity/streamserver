@@ -1,6 +1,7 @@
 from __future__ import unicode_literals, print_function
 
 import gzip
+import logging
 
 import tornado
 import ztreamy
@@ -91,6 +92,16 @@ def _read_cmd_options():
         options.stream_urls = ['http://localhost:9100/collector/compressed']
     return options
 
+def _check_file(filename):
+    try:
+        with open(filename, mode='r'):
+            pass
+    except:
+        correct = False
+    else:
+        correct = True
+    return correct
+
 def main():
     import tornado.options
     options = _read_cmd_options()
@@ -100,7 +111,9 @@ def main():
     server = ztreamy.StreamServer(port)
     stream = ztreamy.RelayStream('dbfeed',
                                  src_stream_urls,
-                                 buffering_time=buffering_time)
+                                 buffering_time=buffering_time,
+                                 label='dbfeed',
+                                 retrieve_missing_events=True)
     test_stream = ztreamy.RelayStream('dbfeed-test',
                                  src_stream_urls,
                                  buffering_time=buffering_time)
@@ -109,10 +122,13 @@ def main():
     debug_publisher = ztreamy.client.LocalEventPublisher(test_stream)
     scheduler = ztreamy.tools.utils.get_scheduler( \
                                     tornado.options.options.distribution)
-    log_data_scheduler = LogDataScheduler(tornado.options.options.testfile,
-                                          debug_publisher,
-                                          scheduler)
-    log_data_scheduler.schedule_next()
+    if _check_file(tornado.options.options.testfile):
+        log_data_scheduler = LogDataScheduler(tornado.options.options.testfile,
+                                            debug_publisher,
+                                            scheduler)
+        log_data_scheduler.schedule_next()
+    else:
+        logging.warn('No events file for dbfeed-test')
     try:
         server.start()
     except KeyboardInterrupt:
