@@ -1,11 +1,7 @@
 from __future__ import unicode_literals
 
-import sys
 import gzip
-import collections
 import argparse
-import re
-import copy
 
 import ztreamy
 
@@ -20,8 +16,8 @@ def read_file(filename):
 def extract_data(filename):
     for event in read_file(filename):
         if event.application_id == 'SmartDriver':
-            body = event.as_json()
-            if body is not None and not '\n' in body:
+            body = event.serialize_json()
+            if body is not None:
                 print(len(body))
                 print(body)
 
