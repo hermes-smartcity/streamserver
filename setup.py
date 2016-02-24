@@ -28,22 +28,13 @@ if sys.version_info[0] != 2 or sys.version_info[1] not in [7]:
 
 # Dependencies
 requirements = ['setuptools',
-                'tornado',
-                'rdflib',
-                'rdfextras',
-                'rdflib-jsonld',
-                'tweepy==2.3.0',
-                'pycurl',
-                'pyparsing==1.5.7',
-                'httplib2',
-                'simplejson',
                 'ztreamy',
                 ]
 
 
 setup(
     name = "hermes-semserver",
-    version = "0.20",
+    version = "0.21",
     author = "Jesus Arias Fisteus",
     description = ("A framework for publishing semantic events for HERMES"),
     keywords = "rdf sensors web semantic-sensor-web",
