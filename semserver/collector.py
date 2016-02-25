@@ -1,7 +1,12 @@
 from __future__ import unicode_literals, print_function
 
+import json
+
 import tornado.options
+
 import ztreamy
+import ztreamy.server
+
 
 class EventTypeRelays(ztreamy.LocalClient):
     def __init__(self, stream, application_id, event_types, buffering_time):
@@ -24,6 +29,33 @@ class EventTypeRelays(ztreamy.LocalClient):
         super(EventTypeRelays, self).start()
 
 
+class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
+    def __init__(self, application, request, **kwargs):
+        super(PublishRequestHandler, self).__init__(application,
+                                                    request,
+                                                    **kwargs)
+        self.set_response_timeout(5.0)
+
+    @tornado.web.asynchronous
+    def get(self):
+        self.post()
+
+    @tornado.web.asynchronous
+    def post(self):
+        events = self.get_and_dispatch_events(finish_request=False)
+        if events and events[0].application_id == 'SmartDriver':
+            self.ioloop.call_later(1.0, self.respond)
+        else:
+            self.finish()
+
+    def respond(self):
+        if not self.finished:
+            answer = {'test': 0.0}
+            self.set_header('Content-Type', ztreamy.json_media_type)
+            self.write(json.dumps(answer))
+            self.finish()
+
+
 def main():
     tornado.options.define('port', default=9100, help='run on the given port',
                            type=int)
@@ -41,9 +73,10 @@ def main():
         buffering_time = None
     server = ztreamy.StreamServer(port)
     collector_stream = ztreamy.Stream('collector',
-                                      parse_event_body=True,
-                                      buffering_time=buffering_time,
-                                      allow_publish=True)
+                                parse_event_body=True,
+                                buffering_time=buffering_time,
+                                allow_publish=True,
+                                custom_publish_handler=PublishRequestHandler)
     if preload_file:
         with open(preload_file, 'rb') as f:
             collector_stream.preload_recent_events_buffer_from_file(f)
