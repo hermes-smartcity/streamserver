@@ -111,8 +111,10 @@ def main():
     server = ztreamy.StreamServer(port)
     stream = ztreamy.RelayStream('dbfeed',
                                  src_stream_urls,
+                                 label='semserver-dbfeed',
+                                 num_recent_events=16384,
+                                 persist_events=True,
                                  buffering_time=buffering_time,
-                                 label='dbfeed',
                                  retrieve_missing_events=True)
     test_stream = ztreamy.RelayStream('dbfeed-test',
                                  src_stream_urls,
