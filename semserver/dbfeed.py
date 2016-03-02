@@ -2,11 +2,14 @@ from __future__ import unicode_literals, print_function
 
 import gzip
 import logging
+import argparse
 
 import tornado
 import ztreamy
 import ztreamy.client
 import ztreamy.tools.utils
+
+from . import utils
 
 
 class LogDataScheduler(object):
@@ -67,31 +70,6 @@ class LogDataScheduler(object):
         file_.close()
 
 
-def _read_cmd_options():
-    from optparse import Values
-    import tornado.options
-    tornado.options.define('port',
-                           default=9102,
-                           help='run on the given port',
-                           type=int)
-    tornado.options.define('buffer',
-                           default=2.0,
-                           help='event buffer time (s)',
-                           type=float)
-    tornado.options.define('distribution',
-                    default='exp[0.1]',
-                    help='event statistical distribution of the test stream')
-    tornado.options.define('testfile',
-                           default='log-hermes.txt',
-                           help='load test data from this file path')
-    remaining = tornado.options.parse_command_line()
-    options = Values()
-    if len(remaining) >= 1:
-        options.stream_urls = remaining
-    else:
-        options.stream_urls = ['http://localhost:9100/collector/compressed']
-    return options
-
 def _check_file(filename):
     try:
         with open(filename, mode='r'):
@@ -102,32 +80,48 @@ def _check_file(filename):
         correct = True
     return correct
 
+def _read_cmd_arguments():
+    parser = argparse.ArgumentParser( \
+                    description='Run the HERMES dbfeed server.')
+    utils.add_server_options(parser, 9102)
+    parser.add_argument('-d', '--distribution', dest='distribution',
+                    default='exp[0.1]',
+                    help='event statistical distribution of the test stream')
+    parser.add_argument('--testfile', dest='testfile',
+                        default='log-hermes.txt',
+                        help='load test data from this file path')
+    parser.add_argument('collectors', nargs='*',
+                        default=['http://localhost:9100/collector/compressed'],
+                        help='collector stream URLs')
+    args = parser.parse_args()
+    return args
+
 def main():
-    import tornado.options
-    options = _read_cmd_options()
-    buffering_time = tornado.options.options.buffer * 1000
-    port = tornado.options.options.port
-    src_stream_urls = options.stream_urls
-    server = ztreamy.StreamServer(port)
+    args = _read_cmd_arguments()
+    if args.buffer > 0:
+        buffering_time = args.buffer * 1000
+    else:
+        buffering_time = None
+    utils.configure_logging('dbfeed')
+    server = ztreamy.StreamServer(args.port)
     stream = ztreamy.RelayStream('dbfeed',
-                                 src_stream_urls,
+                                 args.collectors,
                                  label='semserver-dbfeed',
                                  num_recent_events=16384,
                                  persist_events=True,
                                  buffering_time=buffering_time,
                                  retrieve_missing_events=True)
     test_stream = ztreamy.RelayStream('dbfeed-test',
-                                 src_stream_urls,
+                                 args.collectors,
                                  buffering_time=buffering_time)
     server.add_stream(stream)
     server.add_stream(test_stream)
     debug_publisher = ztreamy.client.LocalEventPublisher(test_stream)
-    scheduler = ztreamy.tools.utils.get_scheduler( \
-                                    tornado.options.options.distribution)
-    if _check_file(tornado.options.options.testfile):
-        log_data_scheduler = LogDataScheduler(tornado.options.options.testfile,
-                                            debug_publisher,
-                                            scheduler)
+    scheduler = ztreamy.tools.utils.get_scheduler(args.distribution)
+    if _check_file(args.testfile):
+        log_data_scheduler = LogDataScheduler(args.testfile,
+                                              debug_publisher,
+                                              scheduler)
         log_data_scheduler.schedule_next()
     else:
         logging.warn('No events file for dbfeed-test')

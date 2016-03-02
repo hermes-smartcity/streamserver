@@ -1,10 +1,13 @@
 from __future__ import unicode_literals, print_function
 
+import argparse
 import shelve
 
 import tornado.ioloop
 import tornado.web
 import ztreamy
+
+from . import utils
 
 
 class DataClient(ztreamy.Client):
@@ -82,25 +85,23 @@ class LatestDataHandler(tornado.web.RequestHandler):
             self.send_error(status_code=404)
 
 
-def _read_cmd_options():
-    from optparse import Values
-    import tornado.options
-    tornado.options.define('port', default=9101, help='run on the given port',
-                           type=int)
-    remaining = tornado.options.parse_command_line()
-    options = Values()
-    if len(remaining) >= 1:
-        options.stream_urls = remaining
-    else:
-        options.stream_urls = ['http://localhost:9100/collector/compressed']
-    return options
+def _read_cmd_arguments():
+    parser = argparse.ArgumentParser( \
+                    description='Run the HERMES REST server.')
+    parser.add_argument('-p', '--port', type=int, dest='port',
+                        default=9101, help='TCP port to use')
+    parser.add_argument('collectors', nargs='*',
+                        default=['http://localhost:9100/collector/compressed'],
+                        help='collector stream URLs')
+    args = parser.parse_args()
+    return args
 
 def main():
-    import tornado.options
-    options = _read_cmd_options()
-    driver_client = DriverDataClient(options.stream_urls)
-    sleep_client = SleepDataClient(options.stream_urls)
-    steps_client = StepsDataClient(options.stream_urls)
+    args = _read_cmd_arguments()
+    utils.configure_logging('restserver')
+    driver_client = DriverDataClient(args.collectors)
+    sleep_client = SleepDataClient(args.collectors)
+    steps_client = StepsDataClient(args.collectors)
     application = tornado.web.Application([
         ('/last_driver_data', LatestDataHandler,
          {'data_client': driver_client}),
@@ -113,7 +114,7 @@ def main():
         driver_client.start()
         sleep_client.start()
         steps_client.start()
-        application.listen(tornado.options.options.port)
+        application.listen(args.port)
         tornado.ioloop.IOLoop.instance().start()
     except KeyboardInterrupt:
         pass

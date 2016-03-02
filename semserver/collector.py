@@ -1,11 +1,13 @@
 from __future__ import unicode_literals, print_function
 
 import json
+import argparse
 
-import tornado.options
-
+import tornado
 import ztreamy
 import ztreamy.server
+
+from . import utils
 
 
 class EventTypeRelays(ztreamy.LocalClient):
@@ -56,19 +58,21 @@ class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
             self.finish()
 
 
+def _read_cmd_arguments():
+    parser = argparse.ArgumentParser( \
+                    description='Run the HERMES collector server.')
+    utils.add_server_options(parser, 9100)
+    args = parser.parse_args()
+    return args
+
 def main():
-    tornado.options.define('port', default=9100, help='run on the given port',
-                           type=int)
-    tornado.options.define('buffer', default=2.0, help='event buffer time (s)',
-                           type=float)
-    tornado.options.parse_command_line()
-    port = tornado.options.options.port
-    if (tornado.options.options.buffer is not None
-        and tornado.options.options.buffer > 0):
-        buffering_time = tornado.options.options.buffer * 1000
+    args = _read_cmd_arguments()
+    if args.buffer > 0:
+        buffering_time = args.buffer * 1000
     else:
         buffering_time = None
-    server = ztreamy.StreamServer(port)
+    utils.configure_logging('collector')
+    server = ztreamy.StreamServer(args.port)
     collector_stream = ztreamy.Stream('collector',
                                 label='semserver-collector',
                                 num_recent_events=16384,
