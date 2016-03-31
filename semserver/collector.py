@@ -65,14 +65,8 @@ def _read_cmd_arguments():
     args = parser.parse_args()
     return args
 
-def main():
-    args = _read_cmd_arguments()
-    if args.buffer > 0:
-        buffering_time = args.buffer * 1000
-    else:
-        buffering_time = None
-    utils.configure_logging('collector')
-    server = ztreamy.StreamServer(args.port)
+def _create_stream_server(port, buffering_time):
+    server = ztreamy.StreamServer(port)
     collector_stream = ztreamy.Stream('collector',
                                 label='semserver-collector',
                                 num_recent_events=16384,
@@ -88,11 +82,23 @@ def main():
                                    'High Acceleration',
                                    'High Deceleration',
                                    'High Heart Rate',
-                                   'Data Section'],
+                                   'Data Section',
+                                   'Context Data',
+                                  ],
                                   buffering_time)
     server.add_stream(collector_stream)
     for stream in type_relays.relays.values():
         server.add_stream(stream)
+    return server, type_relays
+
+def main():
+    args = _read_cmd_arguments()
+    if args.buffer > 0:
+        buffering_time = args.buffer * 1000
+    else:
+        buffering_time = None
+    utils.configure_logging('collector')
+    server, type_relays = _create_stream_server(args.port, buffering_time)
     try:
         type_relays.start()
         server.start()
