@@ -1,6 +1,9 @@
 import logging
 import os
 import os.path
+import cStringIO
+import gzip
+import json
 
 
 DIRNAME_LOGGING = 'logs-semserver'
@@ -27,3 +30,17 @@ def add_server_options(parser, default_port):
     parser.add_argument('-b', '--buffer', type=float, dest='buffer',
                         default=2.0,
                         help='Buffer time in seconds (0 for no buffering)')
+
+def serialize_object_json(data, compress=False):
+    serialized = json.dumps(data.as_dict())
+    if compress:
+        serialized = compress_gzip(serialized)
+    return serialized
+
+def compress_gzip(data):
+    output = cStringIO.StringIO()
+    with gzip.GzipFile(fileobj=output, mode='wb') as gzip_file:
+        gzip_file.write(data)
+    compressed_data = output.getvalue()
+    output.close()
+    return compressed_data

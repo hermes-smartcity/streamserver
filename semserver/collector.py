@@ -1,6 +1,5 @@
 from __future__ import unicode_literals, print_function
 
-import json
 import argparse
 
 import tornado
@@ -8,6 +7,7 @@ import ztreamy
 import ztreamy.server
 
 from . import utils
+from . import feedback
 
 
 class EventTypeRelays(ztreamy.LocalClient):
@@ -52,9 +52,11 @@ class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
 
     def respond(self):
         if not self.finished:
-            answer = {'test': 0.0}
+            answer = feedback.false_feedback()
+            data = utils.serialize_object_json(answer, compress=True)
             self.set_header('Content-Type', ztreamy.json_media_type)
-            self.write(json.dumps(answer))
+            self.set_header('Content-Encoding', 'gzip')
+            self.write(data)
             self.finish()
 
 
