@@ -4,8 +4,11 @@ import sys
 import gzip
 import collections
 import argparse
-import re
 import copy
+import logging
+
+import dateutil
+import dateutil.parser
 
 import ztreamy
 
@@ -22,27 +25,51 @@ ignore_source_ids = (
     'd23389efce367c6639b9e17bcf6e28477e081964987cc6de72d1fd48e186d44a',
 )
 
+_tz_madrid = dateutil.tz.tz.gettz('Europe/Madrid')
+_tz_london = dateutil.tz.tz.gettz('Europe/London')
+
 
 class Record(object):
-    def __init__(self, user_id):
+    def __init__(self, user_id, default_tz=None):
         self.user_id = user_id
         self.record_type = None
         self.timestamp_ini = None
-        self.timestamp = None
         self.latitude = None
         self.latitude_ini = None
         self.longitude = None
         self.longitude_ini = None
+        self.speed = None
+        self.accuracy = None
+        self.accuracy_ini = None
         self.value = None
         self.mean_value = None
         self.median_value = None
         self.std_dev = None
         self.min_value = None
         self.max_value = None
+        self.rr_value = None
+        self._timestamp = None
+        self._time = None
+        if default_tz is not None:
+            self.default_tz = default_tz
+        else:
+            self.default_tz = dateutil.tz.tz.tzoffset('', 3600)
+
+    @property
+    def timestamp(self):
+        return self._timestamp
+
+    @timestamp.setter
+    def timestamp(self, value):
+        self._timestamp = value
+        self._time = None
 
     @property
     def time(self):
-        return ztreamy.rfc3339_as_time(self.timestamp)
+        if self._time is None:
+            self._time = ztreamy.rfc3339_as_time(self.timestamp,
+                                                 default_tz=self.default_tz)
+        return self._time
 
     def as_row(self):
         self.check()
@@ -50,20 +77,26 @@ class Record(object):
 
     def _as_row(self):
         return [str(v) if v is not None else '' \
-                for v in (self.record_type,
+                for v in (self.time,
+                          self.record_type,
                           self.user_id,
                           self.timestamp,
                           self.latitude,
                           self.longitude,
+                          self.accuracy,
+                          self.speed,
                           self.timestamp_ini,
                           self.latitude_ini,
                           self.longitude_ini,
+                          self.accuracy_ini,
                           self.value,
                           self.mean_value,
                           self.median_value,
                           self.std_dev,
                           self.min_value,
-                          self.max_value)]
+                          self.max_value,
+                          self.rr_value,
+                          )]
 
     def check(self):
         if self.record_type is None:
@@ -80,32 +113,19 @@ class Record(object):
         return copy.copy(self)
 
 
-def read_file(filename):
-    events = []
-    with gzip.GzipFile(filename, 'r') as f:
-        for e in ztreamy.Deserializer().deserialize_file(f):
-            events.extend(e)
-    return events
-
-_tz_re = re.compile(r'.*\+\d\d:\d\d$')
-
-def fix_timestamp(timestamp, latitude=None, longitude=None):
-    if not _tz_re.match(timestamp):
-        # No time zone information. Guess it.
-        if latitude is not None:
-            if latitude < 47:
-                mod_timestamp = timestamp + '+01:00'
-            else:
-                mod_timestamp = timestamp + '+00:00'
-        else:
-                mod_timestamp = timestamp + '+01:00'
+def tz_for_latitude(latitude):
+    # Trick for some timestamps that came without timezone
+    if latitude < 47:
+        return _tz_madrid
     else:
-        mod_timestamp = timestamp
-    try:
-        ztreamy.rfc3339_as_time(mod_timestamp)
-    except ztreamy.ZtreamyException:
-        raise ValueError('Bad timestamp: ' + timestamp)
-    return mod_timestamp
+        return _tz_london
+
+def read_file(filename):
+    with gzip.GzipFile(filename, 'r') as f:
+        for events in ztreamy.Deserializer().deserialize_file(f):
+            for e in events:
+                if not e.source_id in ignore_source_ids:
+                    yield e
 
 def group(events):
     groups = collections.defaultdict(list)
@@ -129,25 +149,62 @@ def extract_positions(event):
     if 'roadSection' in event.body['Data Section']:
         samples = event.body['Data Section']['roadSection']
         for sample in samples:
-            record = Record(event.source_id)
+            default_tz = tz_for_latitude(sample['latitude'])
+            record = Record(event.source_id, default_tz=default_tz)
             record.record_type = 'Vehicle Location'
             record.latitude = sample['latitude']
             record.longitude = sample['longitude']
-            record.timestamp = fix_timestamp(sample['timeStamp'])
-            records.append(record)
+            record.timestamp = sample['timeStamp']
+            if 'accuracy' in sample:
+                record.accuracy = sample['accuracy']
+            if 'speed' in sample:
+                record.speed = sample['speed']
+            try:
+                # Check that the timestamp is correct
+                record.time
+            except ztreamy.ZtreamyException:
+                logging.warning('Discard record because of timestamp: {}'\
+                                .format(record.timestamp))
+            else:
+                records.append(record)
+        if 'rrSection' in event.body['Data Section']:
+            samples = event.body['Data Section']['rrSection']
+            if len(samples) == len(records):
+                for rr_value, record in zip(samples, records):
+                    record.rr_value = rr_value
+            elif samples:
+                logging.warning('roadSection of size {} '
+                                'with rrSection of size {}'.\
+                                format(len(records), len(samples)))
     return records
 
 def extract_simple_event(event):
     event_type = event.event_type
-    if event_type is not None and event_type in simple_event_types:
+    if (event_type is not None and event_type in simple_event_types
+        and event_type in event.body):
         data = event.body[event_type]
-        record = Record(event.source_id)
+        default_tz = tz_for_latitude(data['latitude'])
+        record = Record(event.source_id, default_tz=default_tz)
         record.record_type = event_type
-        record.timestamp = fix_timestamp(event.timestamp)
+        record.timestamp = event.timestamp
         record.value = data['value']
         record.latitude = data['latitude']
         record.longitude = data['longitude']
-        records = [record]
+        if 'accuracy' in data:
+            record.accuracy = data['accuracy']
+        if 'speed' in data:
+            record.speed = data['speed']
+        elif event_type == 'High Speed':
+            record.speed = data['value']
+        try:
+            # Check that the timestamp is correct
+            record.time
+        except ztreamy.ZtreamyException:
+            records = []
+            logging.warning('Discard record because of timestamp: {}'\
+                            .format(record.timestamp))
+        else:
+            records = [record]
     else:
         records = []
     return records
@@ -166,6 +223,10 @@ def extract_data_section_event(event):
             base_record.latitude = locations[-1].latitude
             base_record.longitude_ini = locations[0].longitude
             base_record.longitude = locations[-1].longitude
+            if hasattr(locations[0], 'accuracy'):
+                base_record.accuracy_ini = locations[0].accuracy
+            if hasattr(locations[-1], 'accuracy'):
+                base_record.accuracy = locations[-1].accuracy
             # Vehicle speed:
             speed_record = base_record.clone()
             speed_record.record_type = 'Vehicle Speed'
@@ -198,21 +259,46 @@ def extract_data_section_event(event):
                 records.append(rr_record)
     return records
 
-def events_to_records(events, from_timestamp=None):
-    records = []
-    for event in events:
-        records.extend(extract_data(event))
-    records.sort(key=lambda x: x.time)
-    if from_timestamp is not None:
-        from_time = ztreamy.rfc3339_as_time(from_timestamp)
-        records = [r for r in records if r.time >= from_time]
-    return records
-
 def write_records(records):
-    with open('data.csv', mode='w') as f:
+    logging.info('Writing {} records'.format(len(records)))
+    with open('data.csv', mode='a') as f:
         for record in records:
             f.write(','.join(record.as_row()))
             f.write('\n')
+
+def clear_records_file():
+    with open('data.csv', mode='w'):
+        pass
+
+def process_file(events_file, from_timestamp=None):
+    clear_records_file()
+    if from_timestamp is not None:
+        from_time = ztreamy.rfc3339_as_time(from_timestamp)
+    else:
+        from_time = 0
+    records = []
+    num_events = 0
+    num_records = 0
+    for event in read_file(events_file):
+        num_events += 1
+        new_records = extract_data(event)
+        new_records = [r for r in extract_data(event) \
+                       if r.time >= from_time]
+        records.extend(new_records)
+        if num_events % 10000 == 0:
+            logging.info('Read {} events into {} records'\
+                         .format(num_events, len(records) + num_records))
+            if len(records) > 3000000:
+                logging.info('Sorting {} records'.format(len(records)))
+                records.sort(key=lambda x: x.time)
+                write_records(records[:1500000])
+                del records[:1500000]
+                num_records += 1500000
+    logging.info('Read {} events into {} records'.format(num_events,
+                                                       len(records)))
+    logging.info('Sorting {} records'.format(len(records)))
+    records.sort(key=lambda x: x.time)
+    write_records(records)
 
 def _parse_args():
     parser = argparse.ArgumentParser(description='Generate CSV data files.')
@@ -224,11 +310,13 @@ def _parse_args():
     return parser.parse_args()
 
 def main():
+    log_format = '%(asctime)-15s %(levelname)s %(message)s'
+    date_format = '%Y%m%d %H:%M:%S'
+    logging.basicConfig(level=logging.INFO,
+                        format=log_format,
+                        datefmt=date_format)
     args = _parse_args()
-    events = read_file(args.events_file)
-    events = [e for e in events if e.source_id not in ignore_source_ids]
-    records = events_to_records(events, from_timestamp=args.from_date)
-    write_records(records)
+    process_file(args.events_file, from_timestamp=args.from_date)
 
 if __name__ == "__main__":
     main()
