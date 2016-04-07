@@ -48,15 +48,13 @@ class DriverScore(object):
         }
 
 
-def false_driver_score():
-    base_latitude = 40.339300
-    base_longitude = 3.773988
-    return DriverScore(base_latitude + random.uniform(-0.01, 0.01),
-                       base_longitude + random.uniform(-0.01, 0.01),
+def fake_driver_score(base_latitude, base_longitude):
+    return DriverScore(base_latitude + random.uniform(-0.005, 0.005),
+                       base_longitude + random.uniform(-0.005, 0.005),
                        random.randint(0, 1000))
 
-def false_feedback():
+def fake_feedback(base_latitude=40.339300, base_longitude=-3.773988):
     feedback = DriverFeedback()
-    feedback.scores.add_score(false_driver_score())
-    feedback.scores.add_score(false_driver_score())
+    feedback.scores.add_score(fake_driver_score(base_latitude, base_longitude))
+    feedback.scores.add_score(fake_driver_score(base_latitude, base_longitude))
     return feedback

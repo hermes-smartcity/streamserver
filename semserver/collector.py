@@ -37,6 +37,7 @@ class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
                                                     request,
                                                     **kwargs)
         self.set_response_timeout(5.0)
+        self.events = []
 
     @tornado.web.asynchronous
     def get(self):
@@ -45,14 +46,19 @@ class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
     @tornado.web.asynchronous
     def post(self):
         events = self.get_and_dispatch_events(finish_request=False)
-        if events and events[0].application_id == 'SmartDriver':
+        if (events and events[0].application_id == 'SmartDriver'
+            and events[0].event_type == 'Vehicle Location'):
+            self.events = events
             self.ioloop.call_later(1.0, self.respond)
         else:
             self.finish()
 
     def respond(self):
         if not self.finished:
-            answer = feedback.false_feedback()
+            latitude = self.events[0].body['Location']['latitude']
+            longitude = self.events[0].body['Location']['longitude']
+            answer = feedback.fake_feedback(base_latitude=latitude,
+                                            base_longitude=longitude)
             data = utils.serialize_object_json(answer, compress=True)
             self.set_header('Content-Type', ztreamy.json_media_type)
             self.set_header('Content-Encoding', 'gzip')
