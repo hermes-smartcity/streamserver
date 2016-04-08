@@ -1,15 +1,19 @@
 import random
 
+from . import locations
+
 
 class DriverFeedback(object):
     def __init__(self):
         self.recommendation = DriverRecommendation()
         self.scores = CloseScores()
+        self.road_info = {}
 
     def as_dict(self):
         return {
             'recommendation': self.recommendation.as_dict(),
             'scores': self.scores.as_dict(),
+            'roadInfo': self.road_info,
         }
 
 
@@ -48,13 +52,11 @@ class DriverScore(object):
         }
 
 
-def fake_driver_score(base_latitude, base_longitude):
-    return DriverScore(base_latitude + random.uniform(-0.005, 0.005),
-                       base_longitude + random.uniform(-0.005, 0.005),
+def fake_driver_score(base):
+    return DriverScore(base.latitude + random.uniform(-0.005, 0.005),
+                       base.longitude + random.uniform(-0.005, 0.005),
                        random.randint(0, 1000))
 
-def fake_feedback(base_latitude=40.339300, base_longitude=-3.773988):
-    feedback = DriverFeedback()
-    feedback.scores.add_score(fake_driver_score(base_latitude, base_longitude))
-    feedback.scores.add_score(fake_driver_score(base_latitude, base_longitude))
-    return feedback
+def fake_scores(feedback_obj, base=locations.Location(40.339300, -3.773988)):
+    feedback_obj.scores.add_score(fake_driver_score(base))
+    feedback_obj.scores.add_score(fake_driver_score(base))

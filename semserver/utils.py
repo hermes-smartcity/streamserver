@@ -4,9 +4,54 @@ import os.path
 import cStringIO
 import gzip
 import json
+import collections
+import itertools
 
 
 DIRNAME_LOGGING = 'logs-semserver'
+
+
+class LatestValueBuffer(collections.MutableMapping):
+    """Stores the latest data value associated to a key.
+
+    Older data items can be periodically removed through the `roll` method.
+
+    """
+    def __init__(self):
+        self.current = {}
+        self.previous = {}
+
+    def roll(self):
+        self.previous = self.current
+        self.current = {}
+
+    def __contains__(self, key):
+        return key in self.current or key in self.previous
+
+    def __setitem__(self, key, value):
+        self.current[key] = value
+
+    def __getitem__(self, key):
+        try:
+            result = self.current[key]
+        except KeyError:
+            result = self.previous[key]
+        return result
+
+    def __delitem__(self, key):
+        try:
+            del self.current[key]
+        except KeyError:
+            del self.previous[key]
+
+    def __len__(self):
+        # Note the value is incorrect because of intersections,
+        # but we don't want to worry about this matter.
+        return len(self.current) + len(self.previous)
+
+    def __iter__(self):
+        return itertools.chain(self.current, self.previous)
+
 
 def configure_logging(module_name):
     if not os.path.exists(DIRNAME_LOGGING):

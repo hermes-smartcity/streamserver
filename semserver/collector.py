@@ -1,13 +1,53 @@
 from __future__ import unicode_literals, print_function
 
 import argparse
+import json
+import logging
 
-import tornado
+import tornado.web
+import tornado.gen
+import tornado.httpclient
+import tornado.httputil
 import ztreamy
 import ztreamy.server
 
 from . import utils
 from . import feedback
+from . import locations
+
+
+class CollectorStream(ztreamy.Stream):
+    ROLL_LOCATIONS_PERIOD = 60000 # 1 minute
+
+    def __init__(self, buffering_time):
+        super(CollectorStream, self).__init__('collector',
+                                label='semserver-collector',
+                                num_recent_events=16384,
+                                persist_events=True,
+                                parse_event_body=True,
+                                buffering_time=buffering_time,
+                                allow_publish=True,
+                                custom_publish_handler=PublishRequestHandler)
+        self.latest_locations = utils.LatestValueBuffer()
+        self.timers = [
+            tornado.ioloop.PeriodicCallback(self._roll_latest_locations,
+                                            self.ROLL_LOCATIONS_PERIOD,
+                                            io_loop=self.ioloop),
+        ]
+
+    def start(self):
+        super(CollectorStream, self).start()
+        for timer in self.timers:
+            timer.start()
+
+    def stop(self):
+        super(CollectorStream, self).stop()
+        for timer in self.timers:
+            timer.stop()
+
+    def _roll_latest_locations(self):
+        logging.info('Roll latest locations buffer')
+        self.latest_locations.roll()
 
 
 class EventTypeRelays(ztreamy.LocalClient):
@@ -32,12 +72,17 @@ class EventTypeRelays(ztreamy.LocalClient):
 
 
 class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
+    TIMEOUT = 5.0
+    ROAD_INFO_URL = ('http://cronos.lbd.org.es'
+                     '/hermes/api/smartdriver/network/link')
+
     def __init__(self, application, request, **kwargs):
         super(PublishRequestHandler, self).__init__(application,
                                                     request,
                                                     **kwargs)
-        self.set_response_timeout(5.0)
-        self.events = []
+        self.set_response_timeout(self.TIMEOUT)
+        self.feedback = feedback.DriverFeedback()
+        self.pending_pieces = 2
 
     @tornado.web.asynchronous
     def get(self):
@@ -48,22 +93,71 @@ class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
         events = self.get_and_dispatch_events(finish_request=False)
         if (events and events[0].application_id == 'SmartDriver'
             and events[0].event_type == 'Vehicle Location'):
-            self.events = events
-            self.ioloop.call_later(1.0, self.respond)
+            location = locations.Location( \
+                                    events[0].body['Location']['latitude'],
+                                    events[0].body['Location']['longitude'])
+            user_id = events[0].source_id
+            self._request_road_info(user_id, location)
+            self._request_scores(user_id, location)
         else:
             self.finish()
 
+    def on_response_timeout(self):
+        # Respond anyway
+        self.respond()
+
     def respond(self):
         if not self.finished:
-            latitude = self.events[0].body['Location']['latitude']
-            longitude = self.events[0].body['Location']['longitude']
-            answer = feedback.fake_feedback(base_latitude=latitude,
-                                            base_longitude=longitude)
-            data = utils.serialize_object_json(answer, compress=True)
+            data = utils.serialize_object_json(self.feedback, compress=True)
+            logging.info(self.feedback.as_dict())
             self.set_header('Content-Type', ztreamy.json_media_type)
             self.set_header('Content-Encoding', 'gzip')
             self.write(data)
             self.finish()
+
+    def _try_to_respond(self):
+        if self.pending_pieces == 0:
+            self.respond()
+
+    @tornado.gen.coroutine
+    def _request_road_info(self, user_id, location):
+        try:
+            previous = self.stream.latest_locations[user_id]
+        except KeyError:
+            logging.info('No previous location for {}'.format(user_id[:12]))
+            pass
+        else:
+            if previous != location:
+                # Send the request
+                params = {
+                    'currentLat': location.latitude,
+                    'currentLong': location.longitude,
+                    'previousLat': previous.latitude,
+                    'previousLong': previous.longitude,
+                }
+                url = tornado.httputil.url_concat(self.ROAD_INFO_URL, params)
+                logging.info(url)
+                client = tornado.httpclient.AsyncHTTPClient()
+                response = yield client.fetch(url)
+                if response.code == 200 and response.body:
+                    data = json.loads(response.body)
+                    logging.info(data)
+                    self.feedback.road_info = {
+                        'roadType': data['linkType'],
+                        'maxSpeed': data['maxSpeed'],
+                    }
+                else:
+                    logging.info('No response received')
+            else:
+                logging.info('Same location: don\'t ask for roadInfo')
+        self.stream.latest_locations[user_id] = location
+        self.pending_pieces -= 1
+        self._try_to_respond()
+
+    def _request_scores(self, user_id, location):
+        feedback.fake_scores(self.feedback, base=location)
+        self.pending_pieces -= 1
+        self._try_to_respond()
 
 
 def _read_cmd_arguments():
@@ -73,16 +167,10 @@ def _read_cmd_arguments():
     args = parser.parse_args()
     return args
 
+
 def _create_stream_server(port, buffering_time):
     server = ztreamy.StreamServer(port)
-    collector_stream = ztreamy.Stream('collector',
-                                label='semserver-collector',
-                                num_recent_events=16384,
-                                persist_events=True,
-                                parse_event_body=True,
-                                buffering_time=buffering_time,
-                                allow_publish=True,
-                                custom_publish_handler=PublishRequestHandler)
+    collector_stream = CollectorStream(buffering_time)
     type_relays = EventTypeRelays(collector_stream,
                                   'SmartDriver',
                                   ['Vehicle Location',
