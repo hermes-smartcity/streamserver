@@ -38,7 +38,7 @@ setup(
     author = "Jesus Arias Fisteus",
     description = ("A framework for publishing semantic events for HERMES"),
     keywords = "rdf sensors web semantic-sensor-web",
-    url = "http://www.it.uc3m.es/jaf/ztreamy",
+    url = "http://hermes.gast.it.uc3m.es/",
     packages=['semserver'],
     long_description=read('README'),
     install_requires = requirements,
