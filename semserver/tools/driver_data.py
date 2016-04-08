@@ -67,7 +67,7 @@ class Record(object):
     @property
     def time(self):
         if self._time is None:
-            self._time = ztreamy.rfc3339_as_time(self.timestamp,
+            self._time = ztreamy.parse_timestamp(self.timestamp,
                                                  default_tz=self.default_tz)
         return self._time
 
@@ -273,7 +273,7 @@ def clear_records_file():
 def process_file(events_file, from_timestamp=None):
     clear_records_file()
     if from_timestamp is not None:
-        from_time = ztreamy.rfc3339_as_time(from_timestamp)
+        from_time = ztreamy.parse_timestamp(from_timestamp)
     else:
         from_time = 0
     records = []

@@ -36,9 +36,9 @@ class LogDataScheduler(object):
     @staticmethod
     def _generate_from_file(filename):
         send_from_timestamp_citizen = \
-            ztreamy.rfc3339_as_time('2015-11-18T17:00:00+02:00')
+            ztreamy.parse_timestamp('2015-11-18T17:00:00+02:00')
         send_from_timestamp_driver = \
-            ztreamy.rfc3339_as_time('2015-11-10T00:00:00+02:00')
+            ztreamy.parse_timestamp('2015-11-10T00:00:00+02:00')
         if filename.endswith('.gz'):
             file_ = gzip.GzipFile(filename, 'r')
         else:
@@ -52,7 +52,7 @@ class LogDataScheduler(object):
                                            complete=False)
             for event in evs:
                 try:
-                    t = ztreamy.rfc3339_as_time(event.timestamp)
+                    t = ztreamy.parse_timestamp(event.timestamp)
                 except ztreamy.ZtreamyException:
                     send = False
                 else:
