@@ -76,6 +76,7 @@ class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
     TIMEOUT = 5.0
     ROAD_INFO_URL = ('http://cronos.lbd.org.es'
                      '/hermes/api/smartdriver/network/link')
+    DISTANCE_THR = 10.0
 
     def __init__(self, application, request, **kwargs):
         super(PublishRequestHandler, self).__init__(application,
@@ -124,50 +125,55 @@ class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
         self.pending_pieces -= 1
         self._try_to_respond()
 
-    @tornado.gen.coroutine
     def _request_road_info(self, user_id, location):
         try:
             previous = self.stream.latest_locations[user_id]
         except KeyError:
             logging.info('No previous location for {}'.format(user_id[:12]))
-            pass
+            self._get_road_info(location, location)
+            self.stream.latest_locations[user_id] = location
         else:
-            if previous != location:
-                # Send the request
-                params = {
-                    'currentLat': location.latitude,
-                    'currentLong': location.longitude,
-                    'previousLat': previous.latitude,
-                    'previousLong': previous.longitude,
-                }
-                url = tornado.httputil.url_concat(self.ROAD_INFO_URL, params)
-                logging.info(url)
-                client = tornado.httpclient.AsyncHTTPClient()
-                request = tornado.httpclient.HTTPRequest(url,
-                                                         connect_timeout=3.8,
-                                                         request_timeout=4.0)
-                try:
-                    response = yield client.fetch(request)
-                    if response.code == 200 and response.body:
-                        data = json.loads(response.body)
-                        logging.info(data)
-                        self.feedback.road_info = {
-                            'roadType': data['linkType'],
-                            'maxSpeed': data['maxSpeed'],
-                        }
-                    else:
-                        logging.info('No response received')
-                except:
-                    logging.warning('Exception while sending HTTP request',
-                                    exc_info=sys.exc_info())
+            if location.distance(previous) >= self.DISTANCE_THR:
+                self._get_road_info(location, previous)
+                self.stream.latest_locations[user_id] = location
             else:
-                logging.info('Same location: don\'t ask for roadInfo')
-        self.stream.latest_locations[user_id] = location
+                self.stream.latest_locations.refresh(user_id)
+                logging.info('Location too close to the previous one')
         self._end_of_piece()
 
     def _request_scores(self, user_id, location):
         feedback.fake_scores(self.feedback, base=location)
         self._end_of_piece()
+
+    @tornado.gen.coroutine
+    def _get_road_info(self, current_location, previous_location):
+        # Send the request
+        params = {
+            'currentLat': current_location.lat,
+            'currentLong': current_location.long,
+            'previousLat': previous_location.lat,
+            'previousLong': previous_location.long,
+        }
+        url = tornado.httputil.url_concat(self.ROAD_INFO_URL, params)
+        logging.info(url)
+        client = tornado.httpclient.AsyncHTTPClient()
+        request = tornado.httpclient.HTTPRequest(url,
+                                                 connect_timeout=3.8,
+                                                 request_timeout=4.0)
+        try:
+            response = yield client.fetch(request)
+            if response.code == 200 and response.body:
+                data = json.loads(response.body)
+                logging.info(data)
+                self.feedback.road_info = {
+                    'roadType': data['linkType'],
+                    'maxSpeed': data['maxSpeed'],
+                }
+            else:
+                logging.info('No response received')
+        except:
+            logging.warning('Exception while sending HTTP request',
+                            exc_info=sys.exc_info())
 
 
 def _read_cmd_arguments():

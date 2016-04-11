@@ -25,6 +25,10 @@ class LatestValueBuffer(collections.MutableMapping):
         self.previous = self.current
         self.current = {}
 
+    def refresh(self, key):
+        if not key in self.current:
+            self.current[key] = self.previous[key]
+
     def __contains__(self, key):
         return key in self.current or key in self.previous
 

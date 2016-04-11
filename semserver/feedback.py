@@ -53,8 +53,8 @@ class DriverScore(object):
 
 
 def fake_driver_score(base):
-    return DriverScore(base.latitude + random.uniform(-0.005, 0.005),
-                       base.longitude + random.uniform(-0.005, 0.005),
+    return DriverScore(base.lat + random.uniform(-0.005, 0.005),
+                       base.long + random.uniform(-0.005, 0.005),
                        random.randint(0, 1000))
 
 def fake_scores(feedback_obj, base=locations.Location(40.339300, -3.773988)):
