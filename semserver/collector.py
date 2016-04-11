@@ -158,8 +158,7 @@ class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
         logging.info(url)
         client = tornado.httpclient.AsyncHTTPClient()
         request = tornado.httpclient.HTTPRequest(url,
-                                                 connect_timeout=3.8,
-                                                 request_timeout=4.0)
+                                                 request_timeout=self.TIMEOUT)
         try:
             response = yield client.fetch(request)
             if response.code == 200 and response.body:
