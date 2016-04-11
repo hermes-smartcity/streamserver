@@ -106,7 +106,9 @@ class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
 
     def on_response_timeout(self):
         # Respond anyway
-        self.respond()
+        if not self.finished:
+            logging.warning('Publish timeout, responding to the request')
+            self.respond()
 
     def respond(self):
         if not self.finished:
@@ -125,16 +127,17 @@ class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
         self.pending_pieces -= 1
         self._try_to_respond()
 
+    @tornado.gen.coroutine
     def _request_road_info(self, user_id, location):
         try:
             previous = self.stream.latest_locations[user_id]
         except KeyError:
             logging.info('No previous location for {}'.format(user_id[:12]))
-            self._get_road_info(location, location)
+            yield self._get_road_info(location, location)
             self.stream.latest_locations[user_id] = location
         else:
             if location.distance(previous) >= self.DISTANCE_THR:
-                self._get_road_info(location, previous)
+                yield self._get_road_info(location, previous)
                 self.stream.latest_locations[user_id] = location
             else:
                 self.stream.latest_locations.refresh(user_id)
