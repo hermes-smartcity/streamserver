@@ -3,6 +3,7 @@ from __future__ import unicode_literals, print_function
 import argparse
 import json
 import logging
+import sys
 
 import tornado.web
 import tornado.gen
@@ -119,6 +120,10 @@ class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
         if self.pending_pieces == 0:
             self.respond()
 
+    def _end_of_piece(self):
+        self.pending_pieces -= 1
+        self._try_to_respond()
+
     @tornado.gen.coroutine
     def _request_road_info(self, user_id, location):
         try:
@@ -138,26 +143,31 @@ class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
                 url = tornado.httputil.url_concat(self.ROAD_INFO_URL, params)
                 logging.info(url)
                 client = tornado.httpclient.AsyncHTTPClient()
-                response = yield client.fetch(url)
-                if response.code == 200 and response.body:
-                    data = json.loads(response.body)
-                    logging.info(data)
-                    self.feedback.road_info = {
-                        'roadType': data['linkType'],
-                        'maxSpeed': data['maxSpeed'],
-                    }
-                else:
-                    logging.info('No response received')
+                request = tornado.httpclient.HTTPRequest(url,
+                                                         connect_timeout=3.8,
+                                                         request_timeout=4.0)
+                try:
+                    response = yield client.fetch(request)
+                    if response.code == 200 and response.body:
+                        data = json.loads(response.body)
+                        logging.info(data)
+                        self.feedback.road_info = {
+                            'roadType': data['linkType'],
+                            'maxSpeed': data['maxSpeed'],
+                        }
+                    else:
+                        logging.info('No response received')
+                except:
+                    logging.warning('Exception while sending HTTP request',
+                                    exc_info=sys.exc_info())
             else:
                 logging.info('Same location: don\'t ask for roadInfo')
         self.stream.latest_locations[user_id] = location
-        self.pending_pieces -= 1
-        self._try_to_respond()
+        self._end_of_piece()
 
     def _request_scores(self, user_id, location):
         feedback.fake_scores(self.feedback, base=location)
-        self.pending_pieces -= 1
-        self._try_to_respond()
+        self._end_of_piece()
 
 
 def _read_cmd_arguments():
