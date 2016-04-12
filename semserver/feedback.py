@@ -3,17 +3,25 @@ import random
 from . import locations
 
 
+class Status(object):
+    OK = 1
+    USE_PREVIOUS = 21
+    NO_DATA = 22
+    SERVICE_TIMEOUT = 31
+    SERVICE_ERROR = 32
+
+
 class DriverFeedback(object):
     def __init__(self):
         self.recommendation = DriverRecommendation()
         self.scores = CloseScores()
-        self.road_info = {}
+        self.road_info = RoadInfo()
 
     def as_dict(self):
         return {
             'recommendation': self.recommendation.as_dict(),
             'scores': self.scores.as_dict(),
-            'roadInfo': self.road_info,
+            'roadInfo': self.road_info.as_dict(),
         }
 
 
@@ -36,6 +44,32 @@ class CloseScores(object):
         return {
             'closeScores': [score.as_dict() for score in self.scores],
         }
+
+
+class RoadInfo(object):
+    def __init__(self):
+        self.status = None
+        self.road_type = None
+        self.max_speed = None
+
+    def set_data(self, road_type, max_speed):
+        self.status = Status.OK
+        self.road_type = road_type
+        self.max_speed = max_speed
+
+    def no_data(self, status):
+        self.status = status
+        self.road_type = None
+        self.max_speed = None
+
+    def as_dict(self):
+        if self.status is None:
+            raise ValueError('Uninitialized status value in RoadInfo object')
+        data = {'status': self.status}
+        if self.status == Status.OK:
+            data['roadType'] = self.road_type
+            data['maxSpeed'] = self.max_speed
+        return data
 
 
 class DriverScore(object):

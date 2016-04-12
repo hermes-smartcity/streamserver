@@ -3,7 +3,6 @@ from __future__ import unicode_literals, print_function
 import argparse
 import json
 import logging
-import sys
 
 import tornado.web
 import tornado.gen
@@ -108,6 +107,9 @@ class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
         # Respond anyway
         if not self.finished:
             logging.warning('Publish timeout, responding to the request')
+            if self.feedback.road_info.status is None:
+                self.feedback.road_info.no_data( \
+                                        feedback.Status.SERVICE_TIMEOUT)
             self.respond()
 
     def respond(self):
@@ -141,6 +143,7 @@ class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
                 self.stream.latest_locations[user_id] = location
             else:
                 self.stream.latest_locations.refresh(user_id)
+                self.feedback.road_info.no_data(feedback.Status.USE_PREVIOUS)
                 logging.info('Location too close to the previous one')
         self._end_of_piece()
 
@@ -164,18 +167,19 @@ class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
                                                  request_timeout=self.TIMEOUT)
         try:
             response = yield client.fetch(request)
-            if response.code == 200 and response.body:
-                data = json.loads(response.body)
-                logging.info(data)
-                self.feedback.road_info = {
-                    'roadType': data['linkType'],
-                    'maxSpeed': data['maxSpeed'],
-                }
+            if response.code == 200:
+                if response.body:
+                    data = json.loads(response.body)
+                    logging.info(data)
+                    self.feedback.road_info.set_data(data['linkType'],
+                                                     data['maxSpeed'])
+                else:
+                    logging.info('No data available')
+                    self.feedback.road_info.no_data(feedback.Status.NO_DATA)
             else:
-                logging.info('No response received')
+                self.feedback.road_info.no_data(feedback.Status.SERVICE_ERROR)
         except:
-            logging.warning('Exception while sending HTTP request',
-                            exc_info=sys.exc_info())
+            self.feedback.road_info.no_data(feedback.Status.SERVICE_ERROR)
 
 
 def _read_cmd_arguments():
