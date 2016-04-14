@@ -148,7 +148,7 @@ class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
         self._end_of_piece()
 
     def _request_scores(self, user_id, location):
-        feedback.fake_scores(self.feedback, base=location)
+        ## feedback.fake_scores(self.feedback, base=location)
         self._end_of_piece()
 
     @tornado.gen.coroutine
