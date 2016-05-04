@@ -19,11 +19,12 @@ from . import locations
 class CollectorStream(ztreamy.Stream):
     ROLL_LOCATIONS_PERIOD = 60000 # 1 minute
 
-    def __init__(self, buffering_time):
+    def __init__(self, buffering_time, disable_feedback=False,
+                 disable_persistence=False):
         super(CollectorStream, self).__init__('collector',
                                 label='semserver-collector',
                                 num_recent_events=16384,
-                                persist_events=True,
+                                persist_events=not disable_persistence,
                                 parse_event_body=True,
                                 buffering_time=buffering_time,
                                 allow_publish=True,
@@ -34,6 +35,7 @@ class CollectorStream(ztreamy.Stream):
                                             self.ROLL_LOCATIONS_PERIOD,
                                             io_loop=self.ioloop),
         ]
+        self.disable_feedback = disable_feedback
 
     def start(self):
         super(CollectorStream, self).start()
@@ -82,9 +84,10 @@ class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
         super(PublishRequestHandler, self).__init__(application,
                                                     request,
                                                     **kwargs)
-        self.set_response_timeout(self.TIMEOUT)
-        self.feedback = feedback.DriverFeedback()
-        self.pending_pieces = 2
+        if not self.stream.disable_feedback:
+            self.set_response_timeout(self.TIMEOUT)
+            self.feedback = feedback.DriverFeedback()
+            self.pending_pieces = 2
 
     @tornado.web.asynchronous
     def get(self):
@@ -93,7 +96,9 @@ class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
     @tornado.web.asynchronous
     def post(self):
         events = self.get_and_dispatch_events(finish_request=False)
-        if (events and events[0].application_id == 'SmartDriver'
+        if (not self.stream.disable_feedback
+            and events
+            and events[0].application_id == 'SmartDriver'
             and events[0].event_type == 'Vehicle Location'):
             location = locations.Location( \
                                     events[0].body['Location']['latitude'],
@@ -214,14 +219,21 @@ class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
 def _read_cmd_arguments():
     parser = argparse.ArgumentParser( \
                     description='Run the HERMES collector server.')
+    parser.add_argument('--disable-feedback', dest='disable_feedback',
+                        action='store_true')
+    parser.add_argument('--disable-persistence', dest='disable_persistence',
+                        action='store_true')
     utils.add_server_options(parser, 9100)
     args = parser.parse_args()
     return args
 
 
-def _create_stream_server(port, buffering_time):
+def _create_stream_server(port, buffering_time, disable_feedback=False,
+                          disable_persistence=False):
     server = ztreamy.StreamServer(port)
-    collector_stream = CollectorStream(buffering_time)
+    collector_stream = CollectorStream(buffering_time,
+                                       disable_feedback=disable_feedback,
+                                       disable_persistence=disable_persistence)
     type_relays = EventTypeRelays(collector_stream,
                                   'SmartDriver',
                                   ['Vehicle Location',
@@ -245,7 +257,11 @@ def main():
     else:
         buffering_time = None
     utils.configure_logging('collector')
-    server, type_relays = _create_stream_server(args.port, buffering_time)
+    server, type_relays = _create_stream_server( \
+                                args.port,
+                                buffering_time,
+                                disable_feedback=args.disable_feedback,
+                                disable_persistence=args.disable_persistence)
     try:
         type_relays.start()
         server.start()
