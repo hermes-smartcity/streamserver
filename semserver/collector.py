@@ -3,6 +3,7 @@ from __future__ import unicode_literals, print_function
 import argparse
 import json
 import logging
+import os
 
 import tornado.web
 import tornado.gen
@@ -34,8 +35,13 @@ class CollectorStream(ztreamy.Stream):
             tornado.ioloop.PeriodicCallback(self._roll_latest_locations,
                                             self.ROLL_LOCATIONS_PERIOD,
                                             io_loop=self.ioloop),
+            tornado.ioloop.PeriodicCallback(self._periodic_stats,
+                                            30000,
+                                            io_loop=self.ioloop),
         ]
         self.disable_feedback = disable_feedback
+        self.num_events = 0
+        self.latest_times = os.times()
 
     def start(self):
         super(CollectorStream, self).start()
@@ -47,9 +53,23 @@ class CollectorStream(ztreamy.Stream):
         for timer in self.timers:
             timer.stop()
 
+    def count_events(self, num_events):
+        self.num_events += num_events
+
     def _roll_latest_locations(self):
         logging.info('Roll latest locations buffer')
         self.latest_locations.roll()
+
+    def _periodic_stats(self):
+        logging.warn('Events in the last 30s: {}'.format(self.num_events))
+        self.num_events = 0
+        current_times = os.times()
+        user_time = current_times[0] - self.latest_times[0]
+        sys_time = current_times[1] - self.latest_times[1]
+        total_time = user_time + sys_time
+        self.latest_times = current_times
+        logging.warn('Time: {} = {} + {}'.format(total_time, user_time,
+                                                 sys_time))
 
 
 class EventTypeRelays(ztreamy.LocalClient):
@@ -96,6 +116,7 @@ class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
     @tornado.web.asynchronous
     def post(self):
         events = self.get_and_dispatch_events(finish_request=False)
+        self.stream.count_events(len(events))
         if (not self.stream.disable_feedback
             and events
             and events[0].application_id == 'SmartDriver'
