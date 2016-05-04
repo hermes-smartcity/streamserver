@@ -57,7 +57,7 @@ class CollectorStream(ztreamy.Stream):
         self.num_events += num_events
 
     def _roll_latest_locations(self):
-        logging.info('Roll latest locations buffer')
+        logging.debug('Roll latest locations buffer')
         self.latest_locations.roll()
 
     def _periodic_stats(self):
@@ -141,7 +141,6 @@ class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
     def respond(self):
         if not self.finished:
             data = utils.serialize_object_json(self.feedback, compress=True)
-            logging.info(self.feedback.as_dict())
             self.set_header('Content-Type', ztreamy.json_media_type)
             self.set_header('Content-Encoding', 'gzip')
             self.write(data)
@@ -160,7 +159,7 @@ class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
         try:
             previous = self.stream.latest_locations[user_id]
         except KeyError:
-            logging.info('No previous location for {}'.format(user_id[:12]))
+            logging.debug('No previous location for {}'.format(user_id[:12]))
             self.stream.latest_locations[user_id] = location
             self._request_road_info(location, location)
             self._request_scores(user_id, location, score)
@@ -172,7 +171,7 @@ class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
             else:
                 self.stream.latest_locations.refresh(user_id)
                 self.feedback.no_data(feedback.Status.USE_PREVIOUS)
-                logging.info('Location too close to the previous one')
+                logging.debug('Location too close to the previous one')
                 self._end_of_piece()
                 self._end_of_piece()
 
@@ -186,7 +185,7 @@ class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
             'previousLong': previous_location.long,
         }
         url = tornado.httputil.url_concat(self.ROAD_INFO_URL, params)
-        logging.info(url)
+        logging.debug(url)
         client = tornado.httpclient.AsyncHTTPClient()
         request = tornado.httpclient.HTTPRequest(url,
                                                  request_timeout=self.TIMEOUT)
@@ -195,11 +194,11 @@ class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
             if response.code == 200:
                 if response.body:
                     data = json.loads(response.body)
-                    logging.info(data)
+                    logging.debug(data)
                     self.feedback.road_info.set_data(data['linkType'],
                                                      data['maxSpeed'])
                 else:
-                    logging.info('No data available')
+                    logging.debug('No data available')
                     self.feedback.road_info.no_data(feedback.Status.NO_DATA)
             else:
                 self.feedback.road_info.no_data(feedback.Status.SERVICE_ERROR)
@@ -217,7 +216,7 @@ class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
             'score': score,
         }
         url = tornado.httputil.url_concat(self.SCORE_INFO_URL, params)
-        logging.info(url)
+        logging.debug(url)
         client = tornado.httpclient.AsyncHTTPClient()
         request = tornado.httpclient.HTTPRequest(url,
                                                  request_timeout=self.TIMEOUT)
@@ -225,7 +224,7 @@ class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
             response = yield client.fetch(request)
             if response.code == 200:
                 self.feedback.scores.load_from_csv(response.body)
-                logging.info('Received {} scores'\
+                logging.debug('Received {} scores'\
                              .format(len(self.feedback.scores.scores)))
             else:
                 self.feedback.scores.no_data(feedback.Status.SERVICE_ERROR)

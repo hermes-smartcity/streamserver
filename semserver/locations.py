@@ -113,7 +113,7 @@ class LocationIndex(object):
                         user_id, score, time.time()))
         self.conn.commit()
         self.next_id += 1
-        logging.info('Insert {}, {}, {}'.format(location.lat, location.long,
+        logging.debug('Insert {}, {}, {}'.format(location.lat, location.long,
                                                 time.time()))
 
     def lookup(self, location, user_id):
@@ -124,7 +124,7 @@ class LocationIndex(object):
         for row in cursor.execute(self._query_lookup,
                                   (location.lat, location.long,
                                    user_id, timestamp_lim)):
-            logging.info('Lookup: ' + str(row))
+            logging.debug('Lookup: ' + str(row))
             if not row[2] in users:
                 users.add(row[2])
                 yield (Location(row[0], row[1]), row[3])
