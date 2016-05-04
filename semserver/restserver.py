@@ -8,6 +8,7 @@ import tornado.web
 import ztreamy
 
 from . import utils
+from . import locations
 
 
 class DataClient(ztreamy.Client):
@@ -85,6 +86,36 @@ class LatestDataHandler(tornado.web.RequestHandler):
             self.send_error(status_code=404)
 
 
+class DriverScoresHandler(tornado.web.RequestHandler):
+    def initialize(self, index):
+        self.index = index
+
+    def get(self):
+        try:
+            user_id = self.get_query_argument('user')
+            latitude = float(self.get_query_argument('latitude'))
+            longitude = float(self.get_query_argument('longitude'))
+            score = float(self.get_query_argument('score'))
+        except (tornado.web.MissingArgumentError, ValueError):
+            self.send_error(status_code=422)
+        else:
+            location = locations.Location(latitude, longitude)
+            self.set_header('Content-Type', 'text/plain')
+            for o_location, o_score in self.index.lookup(location, user_id):
+                self.write('{},{},{}\r\n'.format(o_location.lat,
+                                                 o_location.long,
+                                                 o_score))
+            self.index.insert(location, user_id, score)
+
+
+class ScoreIndex(locations.LocationIndex):
+    def __init__(self, ioloop):
+        # By now, locations and scores stay 3 days in the DB.
+        # In the future, about 30 min or less would be enough
+        super(ScoreIndex, self).__init__(500.0, ttl=259200)
+        tornado.ioloop.PeriodicCallback(self.roll, 86400000, ioloop)
+
+
 def _read_cmd_arguments():
     parser = argparse.ArgumentParser( \
                     description='Run the HERMES REST server.')
@@ -109,6 +140,8 @@ def main():
          {'data_client': sleep_client}),
         ('/last_steps_data', LatestDataHandler,
          {'data_client': steps_client}),
+        ('/driver_scores', DriverScoresHandler,
+         {'index': ScoreIndex(tornado.ioloop.IOLoop.instance())}),
     ])
     try:
         driver_client.start()

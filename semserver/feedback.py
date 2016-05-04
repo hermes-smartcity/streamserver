@@ -17,6 +17,10 @@ class DriverFeedback(object):
         self.scores = CloseScores()
         self.road_info = RoadInfo()
 
+    def no_data(self, status):
+        self.scores.no_data(status)
+        self.road_info.no_data(status)
+
     def as_dict(self):
         return {
             'recommendation': self.recommendation.as_dict(),
@@ -36,14 +40,36 @@ class DriverRecommendation(object):
 class CloseScores(object):
     def __init__(self):
         self.scores = []
+        self.status = None
 
     def add_score(self, score):
         self.scores.append(score)
 
+    def no_data(self, status):
+        self.status = status
+
+    def status_ok(self):
+        self.status = Status.OK
+
     def as_dict(self):
+        if self.status is None:
+            raise ValueError('Uninitialized status value '
+                             'in CloseScores object')
         return {
+            'status': self.status,
             'closeScores': [score.as_dict() for score in self.scores],
         }
+
+    def load_from_csv(self, data):
+        self.status = Status.OK
+        for line in data.split('\r\n'):
+            if line:
+                parts = [p.strip() for p in line.split(',')]
+                if len(parts) != 3:
+                    raise ValueError('Malformed score line')
+                self.add_score(DriverScore(float(parts[0]),
+                                           float(parts[1]),
+                                           int(parts[2])))
 
 
 class RoadInfo(object):

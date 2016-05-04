@@ -4,6 +4,7 @@ import collections
 import math
 import sqlite3
 import time
+import logging
 
 
 _R = 6371000
@@ -76,6 +77,14 @@ class LocationIndex(object):
         FROM Locations INNER JOIN Data ON Data.id = Locations.id
         WHERE lat_min <= :1 AND lat_max >= :1
         AND long_min <= :2 and long_max >= :2
+        AND (user_id <> :3 OR timestamp < :4)
+        ORDER BY timestamp DESC"""
+
+    _query_lookup_test = """
+        SELECT lat, long, user_id, score
+        FROM Locations INNER JOIN Data ON Data.id = Locations.id
+        WHERE lat_min <= :1 AND lat_max >= :1
+        AND long_min <= :2 and long_max >= :2
         ORDER BY timestamp DESC"""
 
     def __init__(self, search_radius, ttl=600):
@@ -104,15 +113,21 @@ class LocationIndex(object):
                         user_id, score, time.time()))
         self.conn.commit()
         self.next_id += 1
+        logging.info('Insert {}, {}, {}'.format(location.lat, location.long,
+                                                time.time()))
 
-    def lookup(self, location):
+    def lookup(self, location, user_id):
+        # Don't get results from the same user in the last hour
+        timestamp_lim = time.time() - 3600.0
         cursor = self.conn.cursor()
         users = set()
         for row in cursor.execute(self._query_lookup,
-                                  (location.lat, location.long)):
+                                  (location.lat, location.long,
+                                   user_id, timestamp_lim)):
+            logging.info('Lookup: ' + str(row))
             if not row[2] in users:
                 users.add(row[2])
-                yield (row[0], row[1], row[3])
+                yield (Location(row[0], row[1]), row[3])
 
     def roll(self):
         cursor = self.conn.cursor()

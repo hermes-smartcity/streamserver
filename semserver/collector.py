@@ -75,6 +75,7 @@ class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
     TIMEOUT = 5.0
     ROAD_INFO_URL = ('http://cronos.lbd.org.es'
                      '/hermes/api/smartdriver/network/link')
+    SCORE_INFO_URL = 'http://localhost:9101/driver_scores'
     DISTANCE_THR = 10.0
 
     def __init__(self, application, request, **kwargs):
@@ -97,9 +98,9 @@ class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
             location = locations.Location( \
                                     events[0].body['Location']['latitude'],
                                     events[0].body['Location']['longitude'])
+            score = events[0].body['Location']['score']
             user_id = events[0].source_id
-            self._request_road_info(user_id, location)
-            self._request_scores(user_id, location)
+            self._request_info(user_id, location, score)
         else:
             self.finish()
 
@@ -108,8 +109,7 @@ class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
         if not self.finished:
             logging.warning('Publish timeout, responding to the request')
             if self.feedback.road_info.status is None:
-                self.feedback.road_info.no_data( \
-                                        feedback.Status.SERVICE_TIMEOUT)
+                self.feedback.no_data(feedback.Status.SERVICE_TIMEOUT)
             self.respond()
 
     def respond(self):
@@ -130,29 +130,28 @@ class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
         self._try_to_respond()
 
     @tornado.gen.coroutine
-    def _request_road_info(self, user_id, location):
+    def _request_info(self, user_id, location, score):
         try:
             previous = self.stream.latest_locations[user_id]
         except KeyError:
             logging.info('No previous location for {}'.format(user_id[:12]))
-            yield self._get_road_info(location, location)
             self.stream.latest_locations[user_id] = location
+            self._request_road_info(location, location)
+            self._request_scores(user_id, location, score)
         else:
             if location.distance(previous) >= self.DISTANCE_THR:
-                yield self._get_road_info(location, previous)
                 self.stream.latest_locations[user_id] = location
+                self._request_road_info(location, previous)
+                self._request_scores(user_id, location, score)
             else:
                 self.stream.latest_locations.refresh(user_id)
-                self.feedback.road_info.no_data(feedback.Status.USE_PREVIOUS)
+                self.feedback.no_data(feedback.Status.USE_PREVIOUS)
                 logging.info('Location too close to the previous one')
-        self._end_of_piece()
-
-    def _request_scores(self, user_id, location):
-        ## feedback.fake_scores(self.feedback, base=location)
-        self._end_of_piece()
+                self._end_of_piece()
+                self._end_of_piece()
 
     @tornado.gen.coroutine
-    def _get_road_info(self, current_location, previous_location):
+    def _request_road_info(self, current_location, previous_location):
         # Send the request
         params = {
             'currentLat': current_location.lat,
@@ -180,6 +179,36 @@ class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
                 self.feedback.road_info.no_data(feedback.Status.SERVICE_ERROR)
         except:
             self.feedback.road_info.no_data(feedback.Status.SERVICE_ERROR)
+        self._end_of_piece()
+
+    @tornado.gen.coroutine
+    def _request_scores(self, user_id, location, score):
+        ## feedback.fake_scores(self.feedback, base=location)
+        params = {
+            'user': user_id,
+            'latitude': location.lat,
+            'longitude': location.long,
+            'score': score,
+        }
+        url = tornado.httputil.url_concat(self.SCORE_INFO_URL, params)
+        logging.info(url)
+        client = tornado.httpclient.AsyncHTTPClient()
+        request = tornado.httpclient.HTTPRequest(url,
+                                                 request_timeout=self.TIMEOUT)
+        try:
+            response = yield client.fetch(request)
+            if response.code == 200:
+                self.feedback.scores.load_from_csv(response.body)
+                logging.info('Received {} scores'\
+                             .format(len(self.feedback.scores.scores)))
+            else:
+                self.feedback.scores.no_data(feedback.Status.SERVICE_ERROR)
+                logging.warning('Error status code in scores request: {}'\
+                                .format(response.code))
+        except Exception as e:
+            self.feedback.scores.no_data(feedback.Status.SERVICE_ERROR)
+            logging.warning(e)
+        self._end_of_piece()
 
 
 def _read_cmd_arguments():
