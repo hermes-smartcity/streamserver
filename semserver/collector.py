@@ -243,6 +243,9 @@ def _read_cmd_arguments():
                         action='store_true')
     parser.add_argument('--disable-persistence', dest='disable_persistence',
                         action='store_true')
+    parser.add_argument('--log-level', dest='log_level',
+                        choices=['warn', 'info', 'debug'],
+                        default='info')
     utils.add_server_options(parser, 9100)
     args = parser.parse_args()
     return args
@@ -276,7 +279,7 @@ def main():
         buffering_time = args.buffer * 1000
     else:
         buffering_time = None
-    utils.configure_logging('collector')
+    utils.configure_logging('collector', level=args.log_level)
     server, type_relays = _create_stream_server( \
                                 args.port,
                                 buffering_time,

@@ -129,7 +129,7 @@ def _read_cmd_arguments():
 
 def main():
     args = _read_cmd_arguments()
-    utils.configure_logging('restserver')
+    utils.configure_logging('restserver', level=args.log_level)
     driver_client = DriverDataClient(args.collectors)
     sleep_client = SleepDataClient(args.collectors)
     steps_client = StepsDataClient(args.collectors)

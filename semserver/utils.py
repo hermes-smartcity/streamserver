@@ -57,20 +57,21 @@ class LatestValueBuffer(collections.MutableMapping):
         return itertools.chain(self.current, self.previous)
 
 
-def configure_logging(module_name):
+def configure_logging(module_name, level='info'):
     if not os.path.exists(DIRNAME_LOGGING):
         os.makedirs(DIRNAME_LOGGING)
     filename = os.path.join(DIRNAME_LOGGING, module_name + '.log')
     log_format = '%(asctime)-15s %(levelname)s %(message)s'
     date_format = '%Y%m%d %H:%M:%S'
-    logging.basicConfig(level=logging.INFO,
+    level = _log_level(level)
+    logging.basicConfig(level=level,
                         format=log_format,
                         datefmt=date_format)
     # define a Handler which writes INFO messages or higher to the sys.stderr
     file_handler = logging.handlers.WatchedFileHandler(filename)
     file_handler.setFormatter(logging.Formatter(fmt=log_format,
                                                 datefmt=date_format))
-    file_handler.setLevel(logging.INFO)
+    file_handler.setLevel(level)
     logging.getLogger('').addHandler(file_handler)
 
 def add_server_options(parser, default_port):
@@ -93,3 +94,15 @@ def compress_gzip(data):
     compressed_data = output.getvalue()
     output.close()
     return compressed_data
+
+def _log_level(log_level):
+    if log_level == 'warn':
+        return logging.WARN
+    elif log_level == 'info':
+        return logging.INFO
+    elif log_level == 'debug':
+        return logging.DEBUG
+    elif log_level in (logging.WARN, logging.INFO, logging.DEBUG):
+        return log_level
+    else:
+        raise ValueError('Invalid log level string')

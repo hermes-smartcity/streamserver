@@ -102,7 +102,7 @@ def main():
         buffering_time = args.buffer * 1000
     else:
         buffering_time = None
-    utils.configure_logging('dbfeed')
+    utils.configure_logging('dbfeed', level=args.log_level)
     server = ztreamy.StreamServer(args.port)
     stream = ztreamy.RelayStream('dbfeed',
                                  args.collectors,
