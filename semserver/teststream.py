@@ -10,7 +10,7 @@ from . import utils
 def _read_cmd_arguments():
     parser = argparse.ArgumentParser( \
                     description='Run the HERMES test server.')
-    utils.add_server_options(parser, 9105)
+    utils.add_server_options(parser, 9105, stream=True)
     args = parser.parse_args()
     return args
 

@@ -5,6 +5,7 @@ from . import locations
 
 class Status(object):
     OK = 1
+    DISABLED = 11
     USE_PREVIOUS = 21
     NO_DATA = 22
     SERVICE_TIMEOUT = 31
@@ -20,6 +21,12 @@ class DriverFeedback(object):
     def no_data(self, status):
         self.scores.no_data(status)
         self.road_info.no_data(status)
+
+    def timeout(self, status):
+        if  self.scores.status is None:
+            self.scores.no_data(Status.SERVICE_TIMEOUT)
+        if self.road_info.status is None:
+            self.road_info.no_data(Status.SERVICE_TIMEOUT)
 
     def as_dict(self):
         return {
@@ -60,9 +67,9 @@ class CloseScores(object):
             'closeScores': [score.as_dict() for score in self.scores],
         }
 
-    def load_from_csv(self, data):
+    def load_from_lines(self, lines):
         self.status = Status.OK
-        for line in data.split('\r\n'):
+        for line in lines:
             if line:
                 parts = [p.strip() for p in line.split(',')]
                 if len(parts) != 3:

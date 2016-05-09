@@ -87,8 +87,9 @@ class LatestDataHandler(tornado.web.RequestHandler):
 
 
 class DriverScoresHandler(tornado.web.RequestHandler):
-    def initialize(self, index):
+    def initialize(self, index, locations):
         self.index = index
+        self.latest_locations = locations
 
     def get(self):
         try:
@@ -101,11 +102,22 @@ class DriverScoresHandler(tornado.web.RequestHandler):
         else:
             location = locations.Location(latitude, longitude)
             self.set_header('Content-Type', 'text/plain')
-            for o_location, o_score in self.index.lookup(location, user_id):
-                self.write('{},{},{}\r\n'.format(o_location.lat,
-                                                 o_location.long,
-                                                 o_score))
-            self.index.insert(location, user_id, score)
+            check, previous = self.latest_locations.check(user_id, location)
+            if check:
+                self.write('#+{}\r\n'.format(previous))
+                num_results = 0
+                for o_loc, o_score in self.index.lookup(location, user_id):
+                    self.write('{},{},{}\r\n'.format(o_loc.lat,
+                                                     o_loc.long,
+                                                     o_score))
+                    num_results += 1
+                    if num_results == 10:
+                        break
+                ## logging.debug('Sent {} locations'.format(num_results))
+                self.index.insert(location, user_id, score)
+            else:
+                ## logging.debug('Driver didn\'t move enough')
+                self.write('#*{}\r\n'.format(previous))
 
 
 class ScoreIndex(locations.LocationIndex):
@@ -116,45 +128,71 @@ class ScoreIndex(locations.LocationIndex):
         tornado.ioloop.PeriodicCallback(self.roll, 86400000, ioloop)
 
 
+class LatestLocations(utils.LatestValueBuffer):
+    def __init__(self, threshold_distance, ioloop):
+        super(LatestLocations, self).__init__()
+        self.threshold_distance = threshold_distance
+        tornado.ioloop.PeriodicCallback(self.roll, 60000, ioloop)
+
+    def check(self, user_id, location):
+        try:
+            previous = self[user_id]
+        except KeyError:
+            answer = True
+            previous = location
+        else:
+            if location.distance(previous) >= self.threshold_distance:
+                answer = True
+            else:
+                answer = False
+        if answer:
+            self[user_id] = location
+        else:
+            self.refresh(user_id)
+        return answer, previous
+
+
 def _read_cmd_arguments():
     parser = argparse.ArgumentParser( \
                     description='Run the HERMES REST server.')
-    parser.add_argument('-p', '--port', type=int, dest='port',
-                        default=9101, help='TCP port to use')
-    parser.add_argument('collectors', nargs='*',
-                        default=['http://localhost:9100/collector/compressed'],
-                        help='collector stream URLs')
+    ## parser.add_argument('collectors', nargs='*',
+    ##                  default=['http://localhost:9100/collector/compressed'],
+    ##                  help='collector stream URLs')
+    utils.add_server_options(parser, 9101)
     args = parser.parse_args()
     return args
 
 def main():
     args = _read_cmd_arguments()
     utils.configure_logging('restserver', level=args.log_level)
-    driver_client = DriverDataClient(args.collectors)
-    sleep_client = SleepDataClient(args.collectors)
-    steps_client = StepsDataClient(args.collectors)
+    ## driver_client = DriverDataClient(args.collectors)
+    ## sleep_client = SleepDataClient(args.collectors)
+    ## steps_client = StepsDataClient(args.collectors)
     application = tornado.web.Application([
-        ('/last_driver_data', LatestDataHandler,
-         {'data_client': driver_client}),
-        ('/last_sleep_data', LatestDataHandler,
-         {'data_client': sleep_client}),
-        ('/last_steps_data', LatestDataHandler,
-         {'data_client': steps_client}),
+        ## ('/last_driver_data', LatestDataHandler,
+        ##  {'data_client': driver_client}),
+        ## ('/last_sleep_data', LatestDataHandler,
+        ##  {'data_client': sleep_client}),
+        ## ('/last_steps_data', LatestDataHandler,
+        ##  {'data_client': steps_client}),
         ('/driver_scores', DriverScoresHandler,
-         {'index': ScoreIndex(tornado.ioloop.IOLoop.instance())}),
+         {'index': ScoreIndex(tornado.ioloop.IOLoop.instance()),
+          'locations': LatestLocations(10.0, tornado.ioloop.IOLoop.instance()),
+         }),
     ])
     try:
-        driver_client.start()
-        sleep_client.start()
-        steps_client.start()
+        ## driver_client.start()
+        ## sleep_client.start()
+        ## steps_client.start()
         application.listen(args.port)
         tornado.ioloop.IOLoop.instance().start()
     except KeyboardInterrupt:
         pass
     finally:
-        driver_client.close()
-        sleep_client.close()
-        steps_client.close()
+        pass
+        ## driver_client.close()
+        ## sleep_client.close()
+        ## steps_client.close()
 
 
 if __name__ == "__main__":

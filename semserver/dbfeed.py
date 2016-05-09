@@ -83,7 +83,7 @@ def _check_file(filename):
 def _read_cmd_arguments():
     parser = argparse.ArgumentParser( \
                     description='Run the HERMES dbfeed server.')
-    utils.add_server_options(parser, 9102)
+    utils.add_server_options(parser, 9102, stream=True)
     parser.add_argument('-d', '--distribution', dest='distribution',
                     default='exp[0.1]',
                     help='event statistical distribution of the test stream')

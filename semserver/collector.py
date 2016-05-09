@@ -11,6 +11,7 @@ import tornado.httpclient
 import tornado.httputil
 import ztreamy
 import ztreamy.server
+import ztreamy.client
 
 from . import utils
 from . import feedback
@@ -19,9 +20,10 @@ from . import locations
 
 class CollectorStream(ztreamy.Stream):
     ROLL_LOCATIONS_PERIOD = 60000 # 1 minute
+    THRESHOLD_DISTANCE = 10.0
 
     def __init__(self, buffering_time, disable_feedback=False,
-                 disable_persistence=False):
+                 disable_persistence=False, disable_road_info=False):
         super(CollectorStream, self).__init__('collector',
                                 label='semserver-collector',
                                 num_recent_events=16384,
@@ -30,7 +32,7 @@ class CollectorStream(ztreamy.Stream):
                                 buffering_time=buffering_time,
                                 allow_publish=True,
                                 custom_publish_handler=PublishRequestHandler)
-        self.latest_locations = utils.LatestValueBuffer()
+        self.latest_locations = LatestLocationsBuffer(self.THRESHOLD_DISTANCE)
         self.timers = [
             tornado.ioloop.PeriodicCallback(self._roll_latest_locations,
                                             self.ROLL_LOCATIONS_PERIOD,
@@ -40,6 +42,7 @@ class CollectorStream(ztreamy.Stream):
                                             io_loop=self.ioloop),
         ]
         self.disable_feedback = disable_feedback
+        self.disable_road_info = disable_road_info
         self.num_events = 0
         self.latest_times = os.times()
 
@@ -107,7 +110,7 @@ class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
         if not self.stream.disable_feedback:
             self.set_response_timeout(self.TIMEOUT)
             self.feedback = feedback.DriverFeedback()
-            self.pending_pieces = 2
+            self.previous_location = None
 
     @tornado.web.asynchronous
     def get(self):
@@ -134,49 +137,36 @@ class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
         # Respond anyway
         if not self.finished:
             logging.warning('Publish timeout, responding to the request')
-            if self.feedback.road_info.status is None:
-                self.feedback.no_data(feedback.Status.SERVICE_TIMEOUT)
+            self.feedback.timeout()
             self.respond()
 
     def respond(self):
         if not self.finished:
             data = utils.serialize_object_json(self.feedback, compress=True)
+            logging.debug('Finish request')
+            logging.debug(self.feedback.as_dict())
             self.set_header('Content-Type', ztreamy.json_media_type)
             self.set_header('Content-Encoding', 'gzip')
             self.write(data)
             self.finish()
 
-    def _try_to_respond(self):
-        if self.pending_pieces == 0:
-            self.respond()
-
-    def _end_of_piece(self):
-        self.pending_pieces -= 1
-        self._try_to_respond()
-
     @tornado.gen.coroutine
     def _request_info(self, user_id, location, score):
-        try:
-            previous = self.stream.latest_locations[user_id]
-        except KeyError:
-            logging.debug('No previous location for {}'.format(user_id[:12]))
-            self.stream.latest_locations[user_id] = location
-            self._request_road_info(location, location)
-            self._request_scores(user_id, location, score)
-        else:
-            if location.distance(previous) >= self.DISTANCE_THR:
-                self.stream.latest_locations[user_id] = location
-                self._request_road_info(location, previous)
-                self._request_scores(user_id, location, score)
+        if self.stream.latest_locations.check(user_id, location):
+            yield self._request_scores(user_id, location, score)
+            if self.feedback.scores.status == feedback.Status.OK:
+                yield self._request_road_info(location, self.previous_location)
             else:
-                self.stream.latest_locations.refresh(user_id)
-                self.feedback.no_data(feedback.Status.USE_PREVIOUS)
-                logging.debug('Location too close to the previous one')
-                self._end_of_piece()
-                self._end_of_piece()
+                self.feedback.road_info.no_data(self.feedback.scores.status)
+        else:
+            self.feedback.no_data(feedback.Status.USE_PREVIOUS)
+        self.respond()
 
     @tornado.gen.coroutine
     def _request_road_info(self, current_location, previous_location):
+        if self.stream.disable_road_info:
+            self.feedback.road_info.no_data(feedback.Status.DISABLED)
+            return
         # Send the request
         params = {
             'currentLat': current_location.lat,
@@ -204,7 +194,6 @@ class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
                 self.feedback.road_info.no_data(feedback.Status.SERVICE_ERROR)
         except:
             self.feedback.road_info.no_data(feedback.Status.SERVICE_ERROR)
-        self._end_of_piece()
 
     @tornado.gen.coroutine
     def _request_scores(self, user_id, location, score):
@@ -223,17 +212,46 @@ class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
         try:
             response = yield client.fetch(request)
             if response.code == 200:
-                self.feedback.scores.load_from_csv(response.body)
-                logging.debug('Received {} scores'\
-                             .format(len(self.feedback.scores.scores)))
+                lines = response.body.split('\r\n')
+                if lines:
+                    self.previous_location = \
+                                       locations.Location.parse(lines[0][2:])
+                    if lines[0].startswith('#+'):
+                        self.feedback.scores.load_from_lines(lines[1:])
+                        logging.debug('Received {} scores'\
+                                    .format(len(self.feedback.scores.scores)))
+                    else:
+                        self.feedback.scores.no_data( \
+                                                feedback.Status.USE_PREVIOUS)
             else:
-                self.feedback.scores.no_data(feedback.Status.SERVICE_ERROR)
                 logging.warning('Error status code in scores request: {}'\
                                 .format(response.code))
         except Exception as e:
-            self.feedback.scores.no_data(feedback.Status.SERVICE_ERROR)
             logging.warning(e)
-        self._end_of_piece()
+        if self.feedback.scores.status is None:
+            self.feedback.scores.no_data(feedback.Status.SERVICE_ERROR)
+
+
+class LatestLocationsBuffer(utils.LatestValueBuffer):
+    def __init__(self, threshold_distance):
+        super(LatestLocationsBuffer, self).__init__()
+        self.threshold_distance = threshold_distance
+
+    def check(self, user_id, location):
+        try:
+            previous = self[user_id]
+        except KeyError:
+            answer = True
+        else:
+            if location.distance(previous) >= self.threshold_distance:
+                answer = True
+            else:
+                answer = False
+        if answer:
+            self[user_id] = location
+        else:
+            self.refresh(user_id)
+        return answer
 
 
 def _read_cmd_arguments():
@@ -243,19 +261,20 @@ def _read_cmd_arguments():
                         action='store_true')
     parser.add_argument('--disable-persistence', dest='disable_persistence',
                         action='store_true')
-    parser.add_argument('--log-level', dest='log_level',
-                        choices=['warn', 'info', 'debug'],
-                        default='info')
-    utils.add_server_options(parser, 9100)
+    parser.add_argument('--disable-road-info', dest='disable_road_info',
+                        action='store_true')
+    utils.add_server_options(parser, 9100, stream=True)
     args = parser.parse_args()
     return args
 
 
 def _create_stream_server(port, buffering_time, disable_feedback=False,
+                          disable_road_info=False,
                           disable_persistence=False):
     server = ztreamy.StreamServer(port)
     collector_stream = CollectorStream(buffering_time,
                                        disable_feedback=disable_feedback,
+                                       disable_road_info=disable_road_info,
                                        disable_persistence=disable_persistence)
     type_relays = EventTypeRelays(collector_stream,
                                   'SmartDriver',
@@ -284,7 +303,9 @@ def main():
                                 args.port,
                                 buffering_time,
                                 disable_feedback=args.disable_feedback,
+                                disable_road_info=args.disable_road_info,
                                 disable_persistence=args.disable_persistence)
+    ztreamy.client.configure_max_clients(1000)
     try:
         type_relays.start()
         server.start()

@@ -42,10 +42,22 @@ class Location(collections.namedtuple('Location', ('lat', 'long'),
         return (self.from_radians(self.lat_r - r, self.long_r - delta_long),
                 self.from_radians(self.lat_r + r, self.long_r + delta_long))
 
+    def __str__(self):
+        return '{},{}'.format(self.lat, self.long)
+
     @staticmethod
     def from_radians(lat_r, long_r):
         """ Returns a Location object from lat and long in radians."""
         return Location(lat_r * 180 / math.pi, long_r * 180 / math.pi)
+
+    @staticmethod
+    def parse(text):
+        """ Returns a Location object from a str as written by __str__."""
+        parts = text.split(',')
+        if len(parts) == 2:
+            return Location(float(parts[0]), float(parts[1]))
+        else:
+            raise ValueError('Syntax error in Location object')
 
 
 class LocationIndex(object):
@@ -113,18 +125,19 @@ class LocationIndex(object):
                         user_id, score, time.time()))
         self.conn.commit()
         self.next_id += 1
-        logging.debug('Insert {}, {}, {}'.format(location.lat, location.long,
-                                                time.time()))
+        ## logging.debug('Insert {}, {}, {}'.format(location.lat,
+        ##                                          location.long,
+        ##                                          time.time()))
 
     def lookup(self, location, user_id):
         # Don't get results from the same user in the last hour
-        timestamp_lim = time.time() - 3600.0
+        ## timestamp_lim = time.time() - 3600.0
+        timestamp_lim = time.time() - 0.001
         cursor = self.conn.cursor()
         users = set()
         for row in cursor.execute(self._query_lookup,
                                   (location.lat, location.long,
                                    user_id, timestamp_lim)):
-            logging.debug('Lookup: ' + str(row))
             if not row[2] in users:
                 users.add(row[2])
                 yield (Location(row[0], row[1]), row[3])

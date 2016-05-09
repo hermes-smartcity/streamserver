@@ -74,12 +74,18 @@ def configure_logging(module_name, level='info'):
     file_handler.setLevel(level)
     logging.getLogger('').addHandler(file_handler)
 
-def add_server_options(parser, default_port):
+def add_server_options(parser, default_port, stream=False):
     parser.add_argument('-p', '--port', type=int, dest='port',
                         default=default_port, help='TCP port to use')
-    parser.add_argument('-b', '--buffer', type=float, dest='buffer',
-                        default=2.0,
-                        help='Buffer time in seconds (0 for no buffering)')
+    parser.add_argument('--log-level', dest='log_level',
+                        choices=['warn', 'info', 'debug'],
+                        default='info')
+    if stream:
+        parser.add_argument('-b', '--buffer', type=float, dest='buffer',
+                            default=2.0,
+                            help='Buffer time in seconds (0 for no buffering)')
+
+
 
 def serialize_object_json(data, compress=False):
     serialized = json.dumps(data.as_dict())
