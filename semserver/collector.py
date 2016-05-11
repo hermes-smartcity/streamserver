@@ -22,8 +22,10 @@ class CollectorStream(ztreamy.Stream):
     ROLL_LOCATIONS_PERIOD = 60000 # 1 minute
     THRESHOLD_DISTANCE = 10.0
 
-    def __init__(self, buffering_time, disable_feedback=False,
-                 disable_persistence=False, disable_road_info=False):
+    def __init__(self, buffering_time, ioloop=None,
+                 disable_feedback=False,
+                 disable_persistence=False, disable_road_info=False,
+                 backend_stream=None):
         super(CollectorStream, self).__init__('collector',
                                 label='semserver-collector',
                                 num_recent_events=16384,
@@ -31,7 +33,8 @@ class CollectorStream(ztreamy.Stream):
                                 parse_event_body=True,
                                 buffering_time=buffering_time,
                                 allow_publish=True,
-                                custom_publish_handler=PublishRequestHandler)
+                                custom_publish_handler=PublishRequestHandler,
+                                ioloop=ioloop)
         self.latest_locations = LatestLocationsBuffer(self.THRESHOLD_DISTANCE)
         self.timers = [
             tornado.ioloop.PeriodicCallback(self._roll_latest_locations,
@@ -45,14 +48,23 @@ class CollectorStream(ztreamy.Stream):
         self.disable_road_info = disable_road_info
         self.num_events = 0
         self.latest_times = os.times()
+        if backend_stream:
+            self.backend_relay = BackendStreamRelay(self, backend_stream, 0.25,
+                                                    ioloop=self.ioloop)
+        else:
+            self.backend_relay = None
 
     def start(self):
         super(CollectorStream, self).start()
+        if self.backend_relay is not None:
+            self.backend_relay.start()
         for timer in self.timers:
             timer.start()
 
     def stop(self):
         super(CollectorStream, self).stop()
+        if self.backend_relay is not None:
+            self.backend_relay.stop()
         for timer in self.timers:
             timer.stop()
 
@@ -75,17 +87,42 @@ class CollectorStream(ztreamy.Stream):
                                                  sys_time))
 
 
+class BackendStreamRelay(ztreamy.LocalClient):
+    def __init__(self, stream, backend_stream_url, buffering_time,
+                 ioloop=None):
+        super(BackendStreamRelay, self).__init__(stream,
+                                                 self.process_events,
+                                                 separate_events=False)
+        self.publisher = ztreamy.client.ContinuousEventPublisher( \
+                                    backend_stream_url,
+                                    buffering_time=buffering_time,
+                                    io_loop=ioloop)
+
+    def process_events(self, events):
+        self.publisher.publish_events(events)
+
+    def start(self):
+        super(BackendStreamRelay, self).start()
+        self.publisher.start()
+
+    def stop(self):
+        super(BackendStreamRelay, self).stop()
+        self.publisher.stop()
+
+
 class EventTypeRelays(ztreamy.LocalClient):
-    def __init__(self, stream, application_id, event_types, buffering_time):
+    def __init__(self, stream, application_id, event_types, buffering_time,
+                 ioloop=None):
         super(EventTypeRelays, self).__init__(stream, self.process_event)
         self.application_id = application_id
         self.relays = {}
         for event_type in event_types:
-            path = 'collector/type/' + event_type.replace(' ', '')
+            path = stream.path + '/type/' + event_type.replace(' ', '')
             self.relays[event_type] = ztreamy.Stream( \
                                             path,
                                             buffering_time=buffering_time,
-                                            allow_publish=False)
+                                            allow_publish=False,
+                                            ioloop=ioloop)
 
     def process_event(self, event):
         if (event.application_id == self.application_id
@@ -263,6 +300,8 @@ def _read_cmd_arguments():
                         action='store_true')
     parser.add_argument('--disable-road-info', dest='disable_road_info',
                         action='store_true')
+    parser.add_argument('-k', '--backend-stream', dest='backend_stream',
+                        default=None, help='Backend stream URL')
     utils.add_server_options(parser, 9100, stream=True)
     args = parser.parse_args()
     return args
@@ -270,27 +309,33 @@ def _read_cmd_arguments():
 
 def _create_stream_server(port, buffering_time, disable_feedback=False,
                           disable_road_info=False,
-                          disable_persistence=False):
+                          disable_persistence=False,
+                          backend_stream=None):
     server = ztreamy.StreamServer(port)
     collector_stream = CollectorStream(buffering_time,
                                        disable_feedback=disable_feedback,
                                        disable_road_info=disable_road_info,
-                                       disable_persistence=disable_persistence)
-    type_relays = EventTypeRelays(collector_stream,
-                                  'SmartDriver',
-                                  ['Vehicle Location',
-                                   'High Speed',
-                                   'High Acceleration',
-                                   'High Deceleration',
-                                   'High Heart Rate',
-                                   'Data Section',
-                                   'Context Data',
-                                  ],
-                                  buffering_time)
+                                       disable_persistence=disable_persistence,
+                                       backend_stream=backend_stream)
+    if not backend_stream:
+        type_relays = EventTypeRelays(collector_stream,
+                                      'SmartDriver',
+                                      ['Vehicle Location',
+                                       'High Speed',
+                                       'High Acceleration',
+                                       'High Deceleration',
+                                       'High Heart Rate',
+                                       'Data Section',
+                                       'Context Data',
+                                      ],
+                                      buffering_time)
+    else:
+        type_relays = None
     server.add_stream(collector_stream)
-    for stream in type_relays.relays.values():
-        server.add_stream(stream)
-    return server, type_relays
+    if type_relays:
+        for stream in type_relays.relays.values():
+            server.add_stream(stream)
+    return server
 
 def main():
     args = _read_cmd_arguments()
@@ -299,15 +344,15 @@ def main():
     else:
         buffering_time = None
     utils.configure_logging('collector', level=args.log_level)
-    server, type_relays = _create_stream_server( \
+    server = _create_stream_server( \
                                 args.port,
                                 buffering_time,
                                 disable_feedback=args.disable_feedback,
                                 disable_road_info=args.disable_road_info,
-                                disable_persistence=args.disable_persistence)
+                                disable_persistence=args.disable_persistence,
+                                backend_stream=args.backend_stream)
     ztreamy.client.configure_max_clients(1000)
     try:
-        type_relays.start()
         server.start()
     except KeyboardInterrupt:
         pass
