@@ -22,7 +22,7 @@ class DriverFeedback(object):
         self.scores.no_data(status)
         self.road_info.no_data(status)
 
-    def timeout(self, status):
+    def timeout(self):
         if  self.scores.status is None:
             self.scores.no_data(Status.SERVICE_TIMEOUT)
         if self.road_info.status is None:

@@ -22,9 +22,14 @@ class Location(collections.namedtuple('Location', ('lat', 'long'),
 
     def distance(self, other):
         """Distance in m between two locations."""
-        return math.acos(math.sin(self.lat_r) * math.sin(other.lat_r)
-                         + math.cos(self.lat_r) * math.cos(other.lat_r)
-                         * math.cos(self.long_r - other.long_r)) * _R
+        try:
+            return math.acos(math.sin(self.lat_r) * math.sin(other.lat_r)
+                             + math.cos(self.lat_r) * math.cos(other.lat_r)
+                             * math.cos(self.long_r - other.long_r)) * _R
+        except ValueError as e:
+            logging.warn(e)
+            logging.debug('distance({} / {})'.format(self, other))
+            raise
 
     def bounding_box(self, radius):
         """ Return the smallest rectangle that contais a circle around.
