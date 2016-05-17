@@ -89,17 +89,18 @@ class LocationIndex(object):
         FROM Locations INNER JOIN Data ON Data.id = Locations.id
         WHERE lat_min <= :1 AND lat_max >= :1
         AND long_min <= :2 and long_max >= :2
-        AND (user_id <> :3 OR timestamp < :4)
+        AND user_id <> :3
         ORDER BY timestamp DESC"""
 
-    _query_lookup_test = """
+    _query_lookup_same_user = """
         SELECT lat, long, user_id, score
         FROM Locations INNER JOIN Data ON Data.id = Locations.id
         WHERE lat_min <= :1 AND lat_max >= :1
         AND long_min <= :2 and long_max >= :2
+        AND (user_id <> :3 OR timestamp < :4)
         ORDER BY timestamp DESC"""
 
-    def __init__(self, search_radius, ttl=600):
+    def __init__(self, search_radius, ttl=600, allow_same_user=False):
         """ Create a new index.
 
         The parameter `search_radius` should contain the radius
@@ -110,9 +111,15 @@ class LocationIndex(object):
         """
         self.search_radius = search_radius
         self.ttl = ttl
+        if allow_same_user:
+            # Replace the lookup method
+            self.lookup = self._lookup_allow_same_user
         self.conn = sqlite3.connect(':memory:')
         self._create_tables()
         self.next_id = 1
+        logging.debug(('Initialized LocationIndex, radius: {}m, '
+                       'ttl: {}s, allow_same_user: {}')\
+                      .format(search_radius, ttl, allow_same_user))
 
     def insert(self, location, user_id, score):
         top_left, bottom_right = location.bounding_box(self.search_radius)
@@ -130,12 +137,23 @@ class LocationIndex(object):
         ##                                          time.time()))
 
     def lookup(self, location, user_id):
-        # Don't get results from the same user in the last hour
-        ## timestamp_lim = time.time() - 3600.0
-        timestamp_lim = time.time() - 0.001
         cursor = self.conn.cursor()
         users = set()
         for row in cursor.execute(self._query_lookup,
+                                  (location.lat, location.long,
+                                   user_id)):
+            if not row[2] in users:
+                users.add(row[2])
+                yield (Location(row[0], row[1]), row[3])
+
+    def _lookup_allow_same_user(self, location, user_id):
+        # This method replaces the lookup method in the constructor,
+        # when configured.
+        # Don't get results from the same user in the last hour
+        timestamp_lim = time.time() - 3600.0
+        cursor = self.conn.cursor()
+        users = set()
+        for row in cursor.execute(self._query_lookup_same_user,
                                   (location.lat, location.long,
                                    user_id, timestamp_lim)):
             if not row[2] in users:

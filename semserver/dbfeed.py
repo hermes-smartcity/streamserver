@@ -1,7 +1,6 @@
 from __future__ import unicode_literals, print_function
 
 import gzip
-import logging
 import argparse
 
 import tornado
@@ -87,9 +86,6 @@ def _read_cmd_arguments():
     parser.add_argument('-d', '--distribution', dest='distribution',
                     default='exp[0.1]',
                     help='event statistical distribution of the test stream')
-    parser.add_argument('--testfile', dest='testfile',
-                        default='log-hermes.txt',
-                        help='load test data from this file path')
     parser.add_argument('collectors', nargs='*',
                         default=['http://localhost:9100/collector/compressed'],
                         help='collector stream URLs')
@@ -111,20 +107,7 @@ def main():
                                  persist_events=True,
                                  buffering_time=buffering_time,
                                  retrieve_missing_events=True)
-    test_stream = ztreamy.RelayStream('dbfeed-test',
-                                 args.collectors,
-                                 buffering_time=buffering_time)
     server.add_stream(stream)
-    server.add_stream(test_stream)
-    debug_publisher = ztreamy.client.LocalEventPublisher(test_stream)
-    scheduler = ztreamy.tools.utils.get_scheduler(args.distribution)
-    if _check_file(args.testfile):
-        log_data_scheduler = LogDataScheduler(args.testfile,
-                                              debug_publisher,
-                                              scheduler)
-        log_data_scheduler.schedule_next()
-    else:
-        logging.warn('No events file for dbfeed-test')
     try:
         server.start()
     except KeyboardInterrupt:

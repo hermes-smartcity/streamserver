@@ -2,6 +2,8 @@ from __future__ import unicode_literals, print_function
 
 import argparse
 import shelve
+import os
+import logging
 
 import tornado.ioloop
 import tornado.web
@@ -87,11 +89,13 @@ class LatestDataHandler(tornado.web.RequestHandler):
 
 
 class DriverScoresHandler(tornado.web.RequestHandler):
-    def initialize(self, index, locations):
+    def initialize(self, index, locations, stats):
         self.index = index
         self.latest_locations = locations
+        self.stats = stats
 
     def get(self):
+        self.stats.notify_request()
         try:
             user_id = self.get_query_argument('user')
             latitude = float(self.get_query_argument('latitude'))
@@ -121,11 +125,13 @@ class DriverScoresHandler(tornado.web.RequestHandler):
 
 
 class ScoreIndex(locations.LocationIndex):
-    def __init__(self, ioloop):
+    def __init__(self, ioloop, ttl=600, allow_same_user=False):
         # By now, locations and scores stay 3 days in the DB.
         # In the future, about 30 min or less would be enough
-        super(ScoreIndex, self).__init__(500.0, ttl=259200)
-        tornado.ioloop.PeriodicCallback(self.roll, 86400000, ioloop)
+#        super(ScoreIndex, self).__init__(500.0, ttl=259200)
+        super(ScoreIndex, self).__init__(500.0, ttl=ttl,
+                                         allow_same_user=allow_same_user)
+        tornado.ioloop.PeriodicCallback(self.roll, ttl / 4, ioloop)
 
 
 class LatestLocations(utils.LatestValueBuffer):
@@ -158,9 +164,40 @@ def _read_cmd_arguments():
     ## parser.add_argument('collectors', nargs='*',
     ##                  default=['http://localhost:9100/collector/compressed'],
     ##                  help='collector stream URLs')
+    parser.add_argument('-t', '--index-ttl', type=float, dest='index_ttl',
+                        default=600.0,
+                        help=('Time to live for entries in the location '
+                              'index'))
+    parser.add_argument('-s', '--allow-same-user', dest='allow_same_user',
+                        action='store_true',
+                        help=('List the score of the same user also '
+                              '(for testing purposes only)'))
     utils.add_server_options(parser, 9101)
     args = parser.parse_args()
     return args
+
+
+class StatsTimer(object):
+    def __init__(self, period):
+        self.latest_times = os.times()
+        self.num_requests = 0
+        tornado.ioloop.PeriodicCallback(self._periodic_stats, period * 1000)\
+            .start()
+
+    def notify_request(self):
+        self.num_requests += 1
+
+    def _periodic_stats(self):
+        logging.info('Requests in the last 30s: {}'.format(self.num_requests))
+        self.num_requests = 0
+        current_times = os.times()
+        user_time = current_times[0] - self.latest_times[0]
+        sys_time = current_times[1] - self.latest_times[1]
+        total_time = user_time + sys_time
+        self.latest_times = current_times
+        logging.info('Time: {} = {} + {}'.format(total_time, user_time,
+                                                 sys_time))
+
 
 def main():
     args = _read_cmd_arguments()
@@ -176,8 +213,11 @@ def main():
         ## ('/last_steps_data', LatestDataHandler,
         ##  {'data_client': steps_client}),
         ('/driver_scores', DriverScoresHandler,
-         {'index': ScoreIndex(tornado.ioloop.IOLoop.instance()),
+         {'index': ScoreIndex(tornado.ioloop.IOLoop.instance(),
+                              ttl=args.index_ttl,
+                              allow_same_user=args.allow_same_user),
           'locations': LatestLocations(10.0, tornado.ioloop.IOLoop.instance()),
+          'stats': StatsTimer(30.0),
          }),
     ])
     try:
@@ -185,6 +225,7 @@ def main():
         ## sleep_client.start()
         ## steps_client.start()
         application.listen(args.port)
+
         tornado.ioloop.IOLoop.instance().start()
     except KeyboardInterrupt:
         pass
