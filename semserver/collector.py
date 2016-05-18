@@ -18,14 +18,22 @@ from . import feedback
 from . import locations
 
 
+DEFAULT_ROAD_INFO_URL = ('http://cronos.lbd.org.es'
+                         '/hermes/api/smartdriver/network/link')
+DEFAULT_SCORE_INFO_URL = 'http://localhost:9101/driver_scores'
+
+
 class CollectorStream(ztreamy.Stream):
     ROLL_LOCATIONS_PERIOD = 60000 # 1 minute
     THRESHOLD_DISTANCE = 10.0
 
-    def __init__(self, buffering_time, ioloop=None,
+    def __init__(self, buffering_time,
+                 ioloop=None,
                  disable_feedback=False,
-                 disable_persistence=False, disable_road_info=False,
-                 backend_stream=None):
+                 disable_persistence=False,
+                 disable_road_info=False,
+                 backend_stream=None,
+                 score_info_url=DEFAULT_SCORE_INFO_URL):
         super(CollectorStream, self).__init__('collector',
                                 label='semserver-collector',
                                 num_recent_events=16384,
@@ -46,6 +54,7 @@ class CollectorStream(ztreamy.Stream):
         ]
         self.disable_feedback = disable_feedback
         self.disable_road_info = disable_road_info
+        self.score_info_url = score_info_url
         self.num_events = 0
         self.latest_times = os.times()
         if backend_stream:
@@ -135,9 +144,6 @@ class EventTypeRelays(ztreamy.LocalClient):
 
 class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
     TIMEOUT = 5.0
-    ROAD_INFO_URL = ('http://cronos.lbd.org.es'
-                     '/hermes/api/smartdriver/network/link')
-    SCORE_INFO_URL = 'http://localhost:9101/driver_scores'
     DISTANCE_THR = 10.0
 
     def __init__(self, application, request, **kwargs):
@@ -211,7 +217,7 @@ class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
             'previousLat': previous_location.lat,
             'previousLong': previous_location.long,
         }
-        url = tornado.httputil.url_concat(self.ROAD_INFO_URL, params)
+        url = tornado.httputil.url_concat(DEFAULT_ROAD_INFO_URL, params)
         logging.debug(url)
         client = tornado.httpclient.AsyncHTTPClient()
         request = tornado.httpclient.HTTPRequest(url,
@@ -241,7 +247,7 @@ class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
             'longitude': location.long,
             'score': score,
         }
-        url = tornado.httputil.url_concat(self.SCORE_INFO_URL, params)
+        url = tornado.httputil.url_concat(self.stream.score_info_url, params)
         logging.debug(url)
         client = tornado.httpclient.AsyncHTTPClient()
         request = tornado.httpclient.HTTPRequest(url,
@@ -302,6 +308,9 @@ def _read_cmd_arguments():
                         action='store_true')
     parser.add_argument('-k', '--backend-stream', dest='backend_stream',
                         default=None, help='Backend stream URL')
+    parser.add_argument('-i', '--score-info-url', dest='score_info_url',
+                        default=DEFAULT_SCORE_INFO_URL,
+                        help='Scores info service URL')
     utils.add_server_options(parser, 9100, stream=True)
     args = parser.parse_args()
     return args
@@ -310,13 +319,15 @@ def _read_cmd_arguments():
 def _create_stream_server(port, buffering_time, disable_feedback=False,
                           disable_road_info=False,
                           disable_persistence=False,
-                          backend_stream=None):
+                          backend_stream=None,
+                          score_info_url=DEFAULT_SCORE_INFO_URL):
     server = ztreamy.StreamServer(port)
     collector_stream = CollectorStream(buffering_time,
                                        disable_feedback=disable_feedback,
                                        disable_road_info=disable_road_info,
                                        disable_persistence=disable_persistence,
-                                       backend_stream=backend_stream)
+                                       backend_stream=backend_stream,
+                                       score_info_url=score_info_url)
     if not backend_stream:
         type_relays = EventTypeRelays(collector_stream,
                                       'SmartDriver',
@@ -350,7 +361,8 @@ def main():
                                 disable_feedback=args.disable_feedback,
                                 disable_road_info=args.disable_road_info,
                                 disable_persistence=args.disable_persistence,
-                                backend_stream=args.backend_stream)
+                                backend_stream=args.backend_stream,
+                                score_info_url=args.score_info_url)
     ztreamy.client.configure_max_clients(1000)
     try:
         server.start()
