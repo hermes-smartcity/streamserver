@@ -2,6 +2,8 @@ from __future__ import unicode_literals, print_function
 
 import gzip
 import argparse
+import os
+import logging
 
 import tornado
 import ztreamy
@@ -9,6 +11,42 @@ import ztreamy.client
 import ztreamy.tools.utils
 
 from . import utils
+
+
+class DBFeedStream(ztreamy.RelayStream):
+    def __init__(self, *args, **kwargs):
+        super(DBFeedStream, self).__init__(*args, **kwargs)
+        self.timers = [
+            tornado.ioloop.PeriodicCallback(self._periodic_stats,
+                                            30000,
+                                            io_loop=self.ioloop),
+        ]
+        self.num_events = 0
+        self.latest_times = os.times()
+
+    def start(self):
+        super(DBFeedStream, self).start()
+        for timer in self.timers:
+            timer.start()
+
+    def stop(self):
+        super(DBFeedStream, self).stop()
+        for timer in self.timers:
+            timer.stop()
+
+    def count_events(self, num_events):
+        self.num_events += num_events
+
+    def _periodic_stats(self):
+        logging.info('Events in the last 30s: {}'.format(self.num_events))
+        self.num_events = 0
+        current_times = os.times()
+        user_time = current_times[0] - self.latest_times[0]
+        sys_time = current_times[1] - self.latest_times[1]
+        total_time = user_time + sys_time
+        self.latest_times = current_times
+        logging.info('Time: {} = {} + {}'.format(total_time, user_time,
+                                                 sys_time))
 
 
 class LogDataScheduler(object):
@@ -100,13 +138,13 @@ def main():
         buffering_time = None
     utils.configure_logging('dbfeed', level=args.log_level)
     server = ztreamy.StreamServer(args.port)
-    stream = ztreamy.RelayStream('dbfeed',
-                                 args.collectors,
-                                 label='semserver-dbfeed',
-                                 num_recent_events=16384,
-                                 persist_events=True,
-                                 buffering_time=buffering_time,
-                                 retrieve_missing_events=True)
+    stream = DBFeedStream('dbfeed',
+                          args.collectors,
+                          label='semserver-dbfeed',
+                          num_recent_events=16384,
+                          persist_events=True,
+                          buffering_time=buffering_time,
+                          retrieve_missing_events=True)
     server.add_stream(stream)
     try:
         server.start()
