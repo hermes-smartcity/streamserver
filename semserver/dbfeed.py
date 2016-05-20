@@ -125,8 +125,8 @@ def _read_cmd_arguments():
                     default='exp[0.1]',
                     help='event statistical distribution of the test stream')
     parser.add_argument('collectors', nargs='*',
-                        default=['http://localhost:9100/collector/compressed'],
-                        help='collector stream URLs')
+                        default=['http://localhost:9109/backend/compressed'],
+                        help='collector/backend stream URLs')
     args = parser.parse_args()
     return args
 
