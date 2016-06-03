@@ -15,7 +15,8 @@ from . import utils
 
 class DBFeedStream(ztreamy.RelayStream):
     def __init__(self, *args, **kwargs):
-        super(DBFeedStream, self).__init__(*args, **kwargs)
+        super(DBFeedStream, self).__init__(*args, filter_=DBFeedFilter(),
+                                           **kwargs)
         self.timers = [
             tornado.ioloop.PeriodicCallback(self._periodic_stats,
                                             30000,
@@ -47,6 +48,19 @@ class DBFeedStream(ztreamy.RelayStream):
         self.latest_times = current_times
         logging.info('Time: {} = {} + {}'.format(total_time, user_time,
                                                  sys_time))
+
+
+class DBFeedFilter(ztreamy.Filter):
+    def __init__(self):
+        """Creates the default db filter.
+
+        """
+        super(DBFeedFilter, self).__init__(None)
+
+    def filter_event(self, event):
+        if (event.application_id != 'SmartDriver'
+            or event.event_type != 'Vehicle Location'):
+            self.callback(event)
 
 
 class LogDataScheduler(object):

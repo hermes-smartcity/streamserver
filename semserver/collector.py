@@ -288,6 +288,9 @@ class LatestLocationsBuffer(utils.LatestValueBuffer):
         except KeyError:
             answer = True
         else:
+            ## logging.debug('d {} / {} / {}'.format(location.distance(previous),
+            ##                                       location,
+            ##                                       previous))
             if location.distance(previous) >= self.threshold_distance:
                 answer = True
             else:
