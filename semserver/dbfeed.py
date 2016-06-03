@@ -141,7 +141,7 @@ def main():
     stream = DBFeedStream('dbfeed',
                           args.collectors,
                           label='semserver-dbfeed',
-                          num_recent_events=16384,
+                          num_recent_events=2**17,
                           persist_events=True,
                           buffering_time=buffering_time,
                           retrieve_missing_events=True)

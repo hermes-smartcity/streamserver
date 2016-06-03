@@ -20,7 +20,7 @@ class BackendStream(ztreamy.Stream):
     def __init__(self, buffering_time, disable_persistence=False):
         super(BackendStream, self).__init__('backend',
                                 label='semserver-backend',
-                                num_recent_events=16384,
+                                num_recent_events=2**16,
                                 persist_events=not disable_persistence,
                                 parse_event_body=False,
                                 buffering_time=buffering_time,

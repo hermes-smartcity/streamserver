@@ -37,7 +37,7 @@ class CollectorStream(ztreamy.Stream):
                  road_info_url=DEFAULT_SCORE_INFO_URL):
         super(CollectorStream, self).__init__('collector',
                                 label='semserver-collector',
-                                num_recent_events=16384,
+                                num_recent_events=2**16,
                                 persist_events=not disable_persistence,
                                 parse_event_body=True,
                                 buffering_time=buffering_time,
