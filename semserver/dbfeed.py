@@ -124,9 +124,8 @@ def _read_cmd_arguments():
     parser = argparse.ArgumentParser( \
                     description='Run the HERMES dbfeed server.')
     utils.add_server_options(parser, 9102, stream=True)
-    parser.add_argument('-d', '--distribution', dest='distribution',
-                    default='exp[0.1]',
-                    help='event statistical distribution of the test stream')
+    parser.add_argument('--disable-persistence', dest='disable_persistence',
+                        action='store_true')
     parser.add_argument('collectors', nargs='*',
                         default=['http://localhost:9109/backend/compressed'],
                         help='collector/backend stream URLs')
@@ -145,7 +144,7 @@ def main():
                           args.collectors,
                           label='semserver-dbfeed',
                           num_recent_events=2**17,
-                          persist_events=True,
+                          persist_events=not args.disable_persistence,
                           buffering_time=buffering_time,
                           retrieve_missing_events=True)
     server.add_stream(stream)
