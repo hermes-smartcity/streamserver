@@ -57,6 +57,26 @@ class LatestValueBuffer(collections.MutableMapping):
         return itertools.chain(self.current, self.previous)
 
 
+class StatsTracker(object):
+    """Periodically computes CPU time and number of events of a stream."""
+    def __init__(self, stream):
+        self.stream = stream
+        self.last_num_events = self.stream.stats.num_events
+        self.last_times = os.times()
+
+    def compute_cycle(self):
+        # Number of published events
+        num_events = self.stream.stats.num_events - self.last_num_events
+        self.last_num_events = self.stream.stats.num_events
+        # CPU time
+        current_times = os.times()
+        user_time = current_times[0] - self.last_times[0]
+        sys_time = current_times[1] - self.last_times[1]
+        total_time = user_time + sys_time
+        self.last_times = current_times
+        return num_events, total_time
+
+
 def configure_logging(module_name, level='info'):
     if not os.path.exists(DIRNAME_LOGGING):
         os.makedirs(DIRNAME_LOGGING)

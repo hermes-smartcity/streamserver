@@ -3,7 +3,6 @@ from __future__ import unicode_literals, print_function
 import argparse
 import json
 import logging
-import os
 
 import tornado.web
 import tornado.gen
@@ -50,15 +49,14 @@ class CollectorStream(ztreamy.Stream):
                                             self.ROLL_LOCATIONS_PERIOD,
                                             io_loop=self.ioloop),
             tornado.ioloop.PeriodicCallback(self._periodic_stats,
-                                            30000,
+                                            60000,
                                             io_loop=self.ioloop),
         ]
         self.disable_feedback = disable_feedback
         self.disable_road_info = disable_road_info
         self.score_info_url = score_info_url
         self.road_info_url = road_info_url
-        self.num_events = 0
-        self.latest_times = os.times()
+        self.stats_tracker = utils.StatsTracker(self)
         if backend_stream:
             self.backend_relay = BackendStreamRelay(self, backend_stream, 0.25,
                                                     ioloop=self.ioloop)
@@ -79,23 +77,14 @@ class CollectorStream(ztreamy.Stream):
         for timer in self.timers:
             timer.stop()
 
-    def count_events(self, num_events):
-        self.num_events += num_events
-
     def _roll_latest_locations(self):
         logging.debug('Roll latest locations buffer')
         self.latest_locations.roll()
 
     def _periodic_stats(self):
-        logging.info('Events in the last 30s: {}'.format(self.num_events))
-        self.num_events = 0
-        current_times = os.times()
-        user_time = current_times[0] - self.latest_times[0]
-        sys_time = current_times[1] - self.latest_times[1]
-        total_time = user_time + sys_time
-        self.latest_times = current_times
-        logging.info('Time: {} = {} + {}'.format(total_time, user_time,
-                                                 sys_time))
+        num_events, total_time = self.stats_tracker.compute_cycle()
+        logging.info('{} (60s): {} ev / {:.02f}s'\
+                     .format(self.label, num_events, total_time))
 
 
 class BackendStreamRelay(ztreamy.LocalClient):
@@ -164,7 +153,6 @@ class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
     @tornado.web.asynchronous
     def post(self):
         events = self.get_and_dispatch_events(finish_request=False)
-        self.stream.count_events(len(events))
         if (not self.stream.disable_feedback
             and events
             and events[0].application_id == 'SmartDriver'
