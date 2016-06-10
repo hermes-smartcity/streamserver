@@ -144,14 +144,15 @@ class ScoreIndex(locations.LocationIndex):
 #        super(ScoreIndex, self).__init__(500.0, ttl=259200)
         super(ScoreIndex, self).__init__(500.0, ttl=ttl,
                                          allow_same_user=allow_same_user)
-        tornado.ioloop.PeriodicCallback(self.roll, ttl / 4, ioloop)
+        # Roll every ttl / 4 (seconds) = ttl * 250 (milliseconds)
+        tornado.ioloop.PeriodicCallback(self.roll, ttl * 250, ioloop).start()
 
 
 class LatestLocations(utils.LatestValueBuffer):
     def __init__(self, threshold_distance, ioloop):
         super(LatestLocations, self).__init__()
         self.threshold_distance = threshold_distance
-        tornado.ioloop.PeriodicCallback(self.roll, 60000, ioloop)
+        tornado.ioloop.PeriodicCallback(self.roll, 30000, ioloop).start()
 
     def check(self, user_id, location):
         try:
