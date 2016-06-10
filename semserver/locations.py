@@ -179,6 +179,10 @@ class LocationIndex(object):
             cursor.execute('DELETE FROM Locations WHERE id <= ?', (min_id, ))
             self.conn.commit()
 
+    def __len__(self):
+        cursor = self.conn.cursor()
+        return cursor.execute('SELECT COUNT(*) FROM Data').fetchone()[0]
+
     def _create_tables(self):
         cursor = self.conn.cursor()
         for table_decl in self._table_definitions:

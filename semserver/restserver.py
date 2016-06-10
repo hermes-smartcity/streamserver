@@ -176,12 +176,18 @@ PeriodStats = collections.namedtuple('PeriodStats',
                                       'scores_requests',
                                       'road_info_requests',
                                       'scores',
-                                      'total_time'),
+                                      'total_time',
+                                      'size_score_index',
+                                      'size_locations_short',
+                                      'size_locations_long'),
                                      verbose=False)
 
 
 class StatsTracker(object):
-    def __init__(self):
+    def __init__(self, score_index, locations_short, locations_long):
+        self.score_index = score_index
+        self.locations_short = locations_short
+        self.locations_long = locations_long
         self.latest_times = os.times()
         self.num_requests = 0
         self.num_scores_requests = 0
@@ -205,7 +211,10 @@ class StatsTracker(object):
                             self.num_scores_requests,
                             self.num_road_info_requests,
                             self.num_scores,
-                            total_time)
+                            total_time,
+                            len(self.score_index),
+                            len(self.locations_short),
+                            len(self.locations_long))
         self.num_requests = 0
         self.num_scores_requests = 0
         self.num_road_info_requests = 0
@@ -220,6 +229,10 @@ class StatsTracker(object):
                      format(stats.requests, stats.total_time,
                             stats.scores_requests, stats.road_info_requests,
                             stats.scores))
+        logging.info('sizes: {} sc_idx / {} shrt_loc / {} lng_loc'.\
+                     format(stats.size_score_index,
+                            stats.size_locations_short,
+                            stats.size_locations_long))
 
 
 def _read_cmd_arguments():
@@ -247,7 +260,12 @@ def main():
     ## driver_client = DriverDataClient(args.collectors)
     ## sleep_client = SleepDataClient(args.collectors)
     ## steps_client = StepsDataClient(args.collectors)
-    stats_tracker = StatsTracker()
+    score_index = ScoreIndex(tornado.ioloop.IOLoop.instance(),
+                             ttl=args.index_ttl,
+                             allow_same_user=args.allow_same_user)
+    locations_short = LatestLocations(10.0, tornado.ioloop.IOLoop.instance())
+    locations_long = LatestLocations(300.0, tornado.ioloop.IOLoop.instance())
+    stats_tracker = StatsTracker(score_index, locations_short, locations_long)
     application = tornado.web.Application([
         ## ('/last_driver_data', LatestDataHandler,
         ##  {'data_client': driver_client}),
@@ -256,13 +274,9 @@ def main():
         ## ('/last_steps_data', LatestDataHandler,
         ##  {'data_client': steps_client}),
         ('/driver_scores', DriverScoresHandler,
-         {'index': ScoreIndex(tornado.ioloop.IOLoop.instance(),
-                              ttl=args.index_ttl,
-                              allow_same_user=args.allow_same_user),
-          'locations_short': LatestLocations(10.0,
-                                         tornado.ioloop.IOLoop.instance()),
-          'locations_long': LatestLocations(300.0,
-                                         tornado.ioloop.IOLoop.instance()),
+         {'index': score_index,
+          'locations_short': locations_short,
+          'locations_long': locations_long,
           'stats': stats_tracker,
          }),
     ])
