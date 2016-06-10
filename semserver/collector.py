@@ -190,7 +190,7 @@ class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
     def _request_info(self, user_id, location, score):
         if self.stream.latest_locations.check(user_id, location):
             yield self._request_scores(user_id, location, score)
-            if self.feedback.scores.status == feedback.Status.OK:
+            if self.previous_location is not None:
                 yield self._request_road_info(location, self.previous_location)
             else:
                 self.feedback.road_info.no_data(self.feedback.scores.status)
@@ -250,15 +250,18 @@ class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
             if response.code == 200:
                 lines = response.body.split('\r\n')
                 if lines:
-                    self.previous_location = \
-                                       locations.Location.parse(lines[0][2:])
                     if lines[0].startswith('#+'):
+                        self.previous_location = \
+                                        locations.Location.parse(lines[0][2:])
                         self.feedback.scores.load_from_lines(lines[1:])
                         logging.debug('Received {} scores'\
                                     .format(len(self.feedback.scores.scores)))
                     else:
                         self.feedback.scores.no_data( \
                                                 feedback.Status.USE_PREVIOUS)
+                        if lines[0].startswith('#i'):
+                            self.previous_location = \
+                                        locations.Location.parse(lines[0][2:])
             else:
                 logging.warning('Error status code in scores request: {}'\
                                 .format(response.code))

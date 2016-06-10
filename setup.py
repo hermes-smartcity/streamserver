@@ -28,13 +28,13 @@ if sys.version_info[0] != 2 or sys.version_info[1] not in [7]:
 
 # Dependencies
 requirements = ['setuptools',
-                'ztreamy>=0.4.2.dev10',
+                'ztreamy>=0.4.2.dev11',
                 ]
 
 
 setup(
     name = "hermes-semserver",
-    version = "0.43",
+    version = "0.44",
     author = "Jesus Arias Fisteus",
     description = ("A framework for publishing semantic events for HERMES"),
     keywords = "rdf sensors web semantic-sensor-web",

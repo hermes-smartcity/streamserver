@@ -89,9 +89,10 @@ class LatestDataHandler(tornado.web.RequestHandler):
 
 
 class DriverScoresHandler(tornado.web.RequestHandler):
-    def initialize(self, index, locations, stats):
+    def initialize(self, index, locations_short, locations_long, stats):
         self.index = index
-        self.latest_locations = locations
+        self.locations_short = locations_short
+        self.locations_long = locations_long
         self.stats = stats
 
     def get(self):
@@ -106,22 +107,29 @@ class DriverScoresHandler(tornado.web.RequestHandler):
         else:
             location = locations.Location(latitude, longitude)
             self.set_header('Content-Type', 'text/plain')
-            check, previous = self.latest_locations.check(user_id, location)
+            check, previous = self.locations_short.check(user_id, location)
             if check:
-                self.write('#+{}\r\n'.format(previous))
-                num_results = 0
-                for o_loc, o_score in self.index.lookup(location, user_id):
-                    self.write('{},{},{}\r\n'.format(o_loc.lat,
-                                                     o_loc.long,
-                                                     o_score))
-                    num_results += 1
-                    if num_results == 10:
-                        break
+                # Check the long locations buffer to decide whether
+                # to get the scores of other drivers
+                check, previous = self.locations_long.check(user_id, location)
+                if check:
+                    self.write('#+{}\r\n'.format(previous))
+                    num_results = 0
+                    for o_loc, o_score in self.index.lookup(location, user_id):
+                        self.write('{},{},{}\r\n'.format(o_loc.lat,
+                                                         o_loc.long,
+                                                         o_score))
+                        num_results += 1
+                        if num_results == 10:
+                            break
+                else:
+                    self.write('#i{}\r\n'.format(previous))
                 ## logging.debug('Sent {} locations'.format(num_results))
                 self.index.insert(location, user_id, score)
             else:
                 ## logging.debug('Driver didn\'t move enough')
-                self.write('#*{}\r\n'.format(previous))
+                self.locations_long.refresh(user_id)
+                self.write('#*\r\n')
 
 
 class ScoreIndex(locations.LocationIndex):
@@ -216,7 +224,10 @@ def main():
          {'index': ScoreIndex(tornado.ioloop.IOLoop.instance(),
                               ttl=args.index_ttl,
                               allow_same_user=args.allow_same_user),
-          'locations': LatestLocations(10.0, tornado.ioloop.IOLoop.instance()),
+          'locations_short': LatestLocations(10.0,
+                                         tornado.ioloop.IOLoop.instance()),
+          'locations_long': LatestLocations(300.0,
+                                         tornado.ioloop.IOLoop.instance()),
           'stats': StatsTimer(30.0),
          }),
     ])
