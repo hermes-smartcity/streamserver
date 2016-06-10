@@ -58,7 +58,7 @@ class CollectorStream(ztreamy.Stream):
         self.road_info_url = road_info_url
         self.stats_tracker = utils.StatsTracker(self)
         if backend_stream:
-            self.backend_relay = BackendStreamRelay(self, backend_stream, 0.25,
+            self.backend_relay = BackendStreamRelay(self, backend_stream, 0.1,
                                                     ioloop=self.ioloop)
         else:
             self.backend_relay = None
@@ -71,11 +71,11 @@ class CollectorStream(ztreamy.Stream):
             timer.start()
 
     def stop(self):
-        super(CollectorStream, self).stop()
         if self.backend_relay is not None:
             self.backend_relay.stop()
         for timer in self.timers:
             timer.stop()
+        super(CollectorStream, self).stop()
 
     def _roll_latest_locations(self):
         logging.debug('Roll latest locations buffer')
@@ -152,19 +152,22 @@ class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
 
     @tornado.web.asynchronous
     def post(self):
-        events = self.get_and_dispatch_events(finish_request=False)
-        if (not self.stream.disable_feedback
-            and events
-            and events[0].application_id == 'SmartDriver'
-            and events[0].event_type == 'Vehicle Location'):
-            location = locations.Location( \
+        if self.stream.running:
+            events = self.get_and_dispatch_events(finish_request=False)
+            if (not self.stream.disable_feedback
+                and events
+                and events[0].application_id == 'SmartDriver'
+                and events[0].event_type == 'Vehicle Location'):
+                location = locations.Location( \
                                     events[0].body['Location']['latitude'],
                                     events[0].body['Location']['longitude'])
-            score = events[0].body['Location']['score']
-            user_id = events[0].source_id
-            self._request_info(user_id, location, score)
+                score = events[0].body['Location']['score']
+                user_id = events[0].source_id
+                self._request_info(user_id, location, score)
+            else:
+                self.finish()
         else:
-            self.finish()
+            raise tornado.web.HTTPError(503, 'The stream is stopped')
 
     def on_response_timeout(self):
         # Respond anyway
