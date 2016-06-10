@@ -4,6 +4,7 @@ import argparse
 import shelve
 import os
 import logging
+import collections
 
 import tornado.ioloop
 import tornado.web
@@ -96,7 +97,6 @@ class DriverScoresHandler(tornado.web.RequestHandler):
         self.stats = stats
 
     def get(self):
-        self.stats.notify_request()
         try:
             user_id = self.get_query_argument('user')
             latitude = float(self.get_query_argument('latitude'))
@@ -122,14 +122,19 @@ class DriverScoresHandler(tornado.web.RequestHandler):
                         num_results += 1
                         if num_results == 10:
                             break
+                    self.stats.notify_request(scores=True,
+                                              num_scores=num_results,
+                                              road_info=True)
                 else:
                     self.write('#i{}\r\n'.format(previous))
+                    self.stats.notify_request(road_info=True)
                 ## logging.debug('Sent {} locations'.format(num_results))
                 self.index.insert(location, user_id, score)
             else:
                 ## logging.debug('Driver didn\'t move enough')
                 self.locations_long.refresh(user_id)
                 self.write('#*\r\n')
+                self.stats.notify_request()
 
 
 class ScoreIndex(locations.LocationIndex):
@@ -166,6 +171,57 @@ class LatestLocations(utils.LatestValueBuffer):
         return answer, previous
 
 
+PeriodStats = collections.namedtuple('PeriodStats',
+                                     ('requests',
+                                      'scores_requests',
+                                      'road_info_requests',
+                                      'scores',
+                                      'total_time'),
+                                     verbose=False)
+
+
+class StatsTracker(object):
+    def __init__(self):
+        self.latest_times = os.times()
+        self.num_requests = 0
+        self.num_scores_requests = 0
+        self.num_road_info_requests = 0
+        self.num_scores = 0
+
+    def notify_request(self, scores=False, num_scores=0, road_info=False):
+        self.num_requests += 1
+        if scores:
+            self.num_scores_requests += 1
+            self.num_scores += num_scores
+        if road_info:
+            self.num_road_info_requests += 1
+
+    def compute_cycle(self):
+        current_times = os.times()
+        user_time = current_times[0] - self.latest_times[0]
+        sys_time = current_times[1] - self.latest_times[1]
+        total_time = user_time + sys_time
+        stats = PeriodStats(self.num_requests,
+                            self.num_scores_requests,
+                            self.num_road_info_requests,
+                            self.num_scores,
+                            total_time)
+        self.num_requests = 0
+        self.num_scores_requests = 0
+        self.num_road_info_requests = 0
+        self.num_scores = 0
+        self.latest_times = current_times
+        return stats
+
+    def log_stats(self):
+        stats = self.compute_cycle()
+        logging.info('restserver (60s): '
+                     '{} r / {:.02f}s / {} s / {} ri / {} ss'.\
+                     format(stats.requests, stats.total_time,
+                            stats.scores_requests, stats.road_info_requests,
+                            stats.scores))
+
+
 def _read_cmd_arguments():
     parser = argparse.ArgumentParser( \
                     description='Run the HERMES REST server.')
@@ -185,34 +241,13 @@ def _read_cmd_arguments():
     return args
 
 
-class StatsTimer(object):
-    def __init__(self, period):
-        self.latest_times = os.times()
-        self.num_requests = 0
-        tornado.ioloop.PeriodicCallback(self._periodic_stats, period * 1000)\
-            .start()
-
-    def notify_request(self):
-        self.num_requests += 1
-
-    def _periodic_stats(self):
-        logging.info('Requests in the last 30s: {}'.format(self.num_requests))
-        self.num_requests = 0
-        current_times = os.times()
-        user_time = current_times[0] - self.latest_times[0]
-        sys_time = current_times[1] - self.latest_times[1]
-        total_time = user_time + sys_time
-        self.latest_times = current_times
-        logging.info('Time: {} = {} + {}'.format(total_time, user_time,
-                                                 sys_time))
-
-
 def main():
     args = _read_cmd_arguments()
     utils.configure_logging('restserver', level=args.log_level)
     ## driver_client = DriverDataClient(args.collectors)
     ## sleep_client = SleepDataClient(args.collectors)
     ## steps_client = StepsDataClient(args.collectors)
+    stats_tracker = StatsTracker()
     application = tornado.web.Application([
         ## ('/last_driver_data', LatestDataHandler,
         ##  {'data_client': driver_client}),
@@ -228,7 +263,7 @@ def main():
                                          tornado.ioloop.IOLoop.instance()),
           'locations_long': LatestLocations(300.0,
                                          tornado.ioloop.IOLoop.instance()),
-          'stats': StatsTimer(30.0),
+          'stats': stats_tracker,
          }),
     ])
     try:
@@ -236,7 +271,7 @@ def main():
         ## sleep_client.start()
         ## steps_client.start()
         application.listen(args.port)
-
+        tornado.ioloop.PeriodicCallback(stats_tracker.log_stats, 60000).start()
         tornado.ioloop.IOLoop.instance().start()
     except KeyboardInterrupt:
         pass
