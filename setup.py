@@ -34,12 +34,12 @@ requirements = ['setuptools',
 
 setup(
     name = "hermes-semserver",
-    version = "0.47",
+    version = "0.49",
     author = "Jesus Arias Fisteus",
     description = ("A framework for publishing semantic events for HERMES"),
     keywords = "rdf sensors web semantic-sensor-web",
     url = "http://hermes.gast.it.uc3m.es/",
-    packages=['semserver'],
+    packages=['semserver', 'semserver.tools'],
     long_description=read('README'),
     install_requires = requirements,
 )

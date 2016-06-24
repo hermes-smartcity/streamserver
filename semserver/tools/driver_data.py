@@ -147,35 +147,38 @@ def extract_data(event):
 def extract_positions(event):
     records = []
     if 'roadSection' in event.body['Data Section']:
-        samples = event.body['Data Section']['roadSection']
-        for sample in samples:
-            default_tz = tz_for_latitude(sample['latitude'])
-            record = Record(event.source_id, default_tz=default_tz)
-            record.record_type = 'Vehicle Location'
-            record.latitude = sample['latitude']
-            record.longitude = sample['longitude']
-            record.timestamp = sample['timeStamp']
-            if 'accuracy' in sample:
-                record.accuracy = sample['accuracy']
-            if 'speed' in sample:
-                record.speed = sample['speed']
-            try:
-                # Check that the timestamp is correct
-                record.time
-            except ztreamy.ZtreamyException:
-                logging.warning('Discard record because of timestamp: {}'\
-                                .format(record.timestamp))
-            else:
-                records.append(record)
-        if 'rrSection' in event.body['Data Section']:
-            samples = event.body['Data Section']['rrSection']
-            if len(samples) == len(records):
-                for rr_value, record in zip(samples, records):
-                    record.rr_value = rr_value
-            elif samples:
-                logging.warning('roadSection of size {} '
-                                'with rrSection of size {}'.\
-                                format(len(records), len(samples)))
+        try:
+            samples = event.body['Data Section']['roadSection']
+            for sample in samples:
+                default_tz = tz_for_latitude(sample['latitude'])
+                record = Record(event.source_id, default_tz=default_tz)
+                record.record_type = 'Vehicle Location'
+                record.latitude = sample['latitude']
+                record.longitude = sample['longitude']
+                record.timestamp = sample['timeStamp']
+                if 'accuracy' in sample:
+                    record.accuracy = sample['accuracy']
+                if 'speed' in sample:
+                    record.speed = sample['speed']
+                try:
+                    # Check that the timestamp is correct
+                    record.time
+                except ztreamy.ZtreamyException:
+                    logging.warning('Discard record because of timestamp: {}'\
+                                    .format(record.timestamp))
+                else:
+                    records.append(record)
+            if 'rrSection' in event.body['Data Section']:
+                samples = event.body['Data Section']['rrSection']
+                if len(samples) == len(records):
+                    for rr_value, record in zip(samples, records):
+                        record.rr_value = rr_value
+                elif samples:
+                    logging.warning('roadSection of size {} '
+                                    'with rrSection of size {}'.\
+                                    format(len(records), len(samples)))
+        except KeyError:
+            logging.warning('Key error in a Data Section event')
     return records
 
 def extract_simple_event(event):
