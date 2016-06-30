@@ -34,6 +34,7 @@ def _create_stream_server(port, buffering_time, disable_feedback=False,
                           road_info_url=collector.DEFAULT_ROAD_INFO_URL):
     server = ztreamy.StreamServer(port, xheaders=True)
     stream = collector.CollectorStream(buffering_time,
+                                       label='frontend-{}'.format(port),
                                        disable_feedback=disable_feedback,
                                        disable_road_info=disable_road_info,
                                        disable_persistence=True,

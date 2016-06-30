@@ -27,6 +27,7 @@ class CollectorStream(ztreamy.Stream):
     THRESHOLD_DISTANCE = 10.0
 
     def __init__(self, buffering_time,
+                 label='semserver-collector',
                  ioloop=None,
                  disable_feedback=False,
                  disable_persistence=False,
@@ -35,7 +36,7 @@ class CollectorStream(ztreamy.Stream):
                  score_info_url=DEFAULT_SCORE_INFO_URL,
                  road_info_url=DEFAULT_SCORE_INFO_URL):
         super(CollectorStream, self).__init__('collector',
-                                label='semserver-collector',
+                                label=label,
                                 num_recent_events=2**16,
                                 persist_events=not disable_persistence,
                                 parse_event_body=True,
