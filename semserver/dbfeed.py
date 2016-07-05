@@ -3,6 +3,7 @@ from __future__ import unicode_literals, print_function
 import gzip
 import argparse
 import logging
+import datetime
 
 import tornado
 import ztreamy
@@ -17,11 +18,12 @@ class DBFeedStream(ztreamy.RelayStream):
         super(DBFeedStream, self).__init__(*args, filter_=DBFeedFilter(),
                                            **kwargs)
         self.timers = [
-            tornado.ioloop.PeriodicCallback(self._periodic_stats,
-                                            60000,
-                                            io_loop=self.ioloop),
+            ## tornado.ioloop.PeriodicCallback(self._periodic_stats,
+            ##                                 60000,
+            ##                                 io_loop=self.ioloop),
         ]
         self.stats_tracker = utils.StatsTracker(self)
+        self._schedule_next_stats_period()
 
     def start(self):
         super(DBFeedStream, self).start()
@@ -34,9 +36,16 @@ class DBFeedStream(ztreamy.RelayStream):
             timer.stop()
 
     def _periodic_stats(self):
-        num_events, total_time = self.stats_tracker.compute_cycle()
-        logging.info('{} (60s): {} ev / {:.02f}s'\
-                     .format(self.label, num_events, total_time))
+        stats = self.stats_tracker.compute_cycle()
+        logging.info(('{0} (60s): {1.num_events} ev / {1.cpu_time:.02f}s '
+                      ' / r: {1.real_time:.02f}s / u: {1.utilization:.03f}')\
+                     .format(self.label, stats))
+        self._schedule_next_stats_period()
+
+    def _schedule_next_stats_period(self):
+        self.ioloop.add_timeout(datetime.timedelta( \
+                                        seconds=60 - self.ioloop.time() % 60),
+                                self._periodic_stats)
 
 
 class DBFeedFilter(ztreamy.Filter):

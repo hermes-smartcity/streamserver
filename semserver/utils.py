@@ -71,11 +71,31 @@ class StatsTracker(object):
         self.last_num_events = self.stream.stats.num_events
         # CPU time
         current_times = os.times()
-        user_time = current_times[0] - self.last_times[0]
-        sys_time = current_times[1] - self.last_times[1]
-        total_time = user_time + sys_time
+        stats = StatsValue(num_events, current_times, self.last_times)
         self.last_times = current_times
-        return num_events, total_time
+        return stats
+
+
+class StatsValue(object):
+    """Object returned by the StatsTracker class."""
+    def __init__(self, num_events, current_times, last_times):
+        self.num_events = num_events
+        # current_times, last_times: 0 is user_time; 1 is sys_time
+        self.cpu_time = (current_times[0] - last_times[0]
+                         + current_times[1] - last_times[1])
+        self.real_time = current_times[4] - last_times[4]
+
+    @property
+    def utilization(self):
+        return self.cpu_time / self.real_time
+
+    @property
+    def events_per_second(self):
+        return self.num_events / self.real_time
+
+    @property
+    def time_per_event(self):
+        return self.cpu_time / self.num_events
 
 
 def configure_logging(module_name, level='info'):

@@ -5,6 +5,7 @@ import shelve
 import os
 import logging
 import collections
+import datetime
 
 import tornado.ioloop
 import tornado.web
@@ -185,10 +186,11 @@ PeriodStats = collections.namedtuple('PeriodStats',
 
 
 class StatsTracker(object):
-    def __init__(self, score_index, locations_short, locations_long):
+    def __init__(self, score_index, locations_short, locations_long, ioloop):
         self.score_index = score_index
         self.locations_short = locations_short
         self.locations_long = locations_long
+        self.ioloop = ioloop
         self.latest_times = os.times()
         self.num_requests = 0
         self.num_scores_requests = 0
@@ -234,6 +236,13 @@ class StatsTracker(object):
                      format(stats.size_score_index,
                             stats.size_locations_short,
                             stats.size_locations_long))
+        self._schedule_next_stats_period()
+
+    def _schedule_next_stats_period(self):
+        self.ioloop.add_timeout(datetime.timedelta( \
+                                        seconds=60 - self.ioloop.time() % 60),
+                                self.log_stats)
+
 
 
 def _read_cmd_arguments():
@@ -266,7 +275,8 @@ def main():
                              allow_same_user=args.allow_same_user)
     locations_short = LatestLocations(10.0, tornado.ioloop.IOLoop.instance())
     locations_long = LatestLocations(300.0, tornado.ioloop.IOLoop.instance())
-    stats_tracker = StatsTracker(score_index, locations_short, locations_long)
+    stats_tracker = StatsTracker(score_index, locations_short, locations_long,
+                                 tornado.ioloop.IOLoop.instance())
     application = tornado.web.Application([
         ## ('/last_driver_data', LatestDataHandler,
         ##  {'data_client': driver_client}),
@@ -286,7 +296,7 @@ def main():
         ## sleep_client.start()
         ## steps_client.start()
         application.listen(args.port)
-        tornado.ioloop.PeriodicCallback(stats_tracker.log_stats, 60000).start()
+        stats_tracker._schedule_next_stats_period()
         tornado.ioloop.IOLoop.instance().start()
     except KeyboardInterrupt:
         pass
