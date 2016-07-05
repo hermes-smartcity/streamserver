@@ -151,7 +151,7 @@ def main():
     server = ztreamy.StreamServer(args.port)
     stream = DBFeedStream('dbfeed',
                           args.collectors,
-                          label='semserver-dbfeed',
+                          label='dbfeed',
                           num_recent_events=2**17,
                           persist_events=not args.disable_persistence,
                           buffering_time=buffering_time,

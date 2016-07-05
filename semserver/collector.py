@@ -28,7 +28,7 @@ class CollectorStream(ztreamy.Stream):
     THRESHOLD_DISTANCE = 10.0
 
     def __init__(self, buffering_time,
-                 label='semserver-collector',
+                 label='collector',
                  ioloop=None,
                  disable_feedback=False,
                  disable_persistence=False,
