@@ -38,7 +38,7 @@ class DBFeedStream(ztreamy.RelayStream):
     def _periodic_stats(self):
         stats = self.stats_tracker.compute_cycle()
         logging.info(('{0} (60s): {1.num_events} ev / {1.cpu_time:.02f}s '
-                      ' / r: {1.real_time:.02f}s / u: {1.utilization:.03f}')\
+                      ' / u: {1.utilization:.03f}')\
                      .format(self.label, stats))
         self._schedule_next_stats_period()
 
