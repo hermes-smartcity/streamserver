@@ -6,6 +6,7 @@ import os.path
 import re
 import time
 import logging
+import argparse
 
 from .. import utils
 
@@ -33,7 +34,10 @@ class CPUMonitor(object):
         self.update()
 
     def update(self):
-        cpu_time = self._compute_cpu()
+        try:
+            cpu_time = self._compute_cpu()
+        except IOError:
+            raise ProcessChangedException()
         if self.last_cpu_time is not None:
             diff = cpu_time - self.last_cpu_time
             if diff < 0:
@@ -44,7 +48,7 @@ class CPUMonitor(object):
         self.last_cpu_time = cpu_time
         return diff
 
-    def check(self, cmdline_re):
+    def check_cmd(self, cmdline_re):
         correct = False
         if self.status_ok:
             try:
@@ -55,6 +59,16 @@ class CPUMonitor(object):
                 pass
         self.status_ok = correct
         return correct
+
+    def check_running(self):
+        try:
+            with open(self.stat_file) as f:
+                f.readline()
+        except:
+            running = False
+        else:
+            running = True
+        return running
 
     def _compute_cpu(self):
         with open(self.stat_file) as f:
@@ -67,8 +81,11 @@ class CPUMonitor(object):
 
 
 class CPUMultiMonitor(object):
-    def __init__(self, cmdline_re):
+    def __init__(self, cmdline_re=None, pids=None):
+        if not cmdline_re and not pids:
+            raise ValueError('Regular expression or PID list expected')
         self.cmdline_re = cmdline_re
+        self.pids = pids
         self.monitors = {}
         self.update_monitors(reset_now=True)
 
@@ -85,18 +102,30 @@ class CPUMultiMonitor(object):
 
     def update_monitors(self, reset_now=False):
         self.check_monitors()
-        pids = get_pids(self.cmdline_re)
+        if self.cmdline_re:
+            pids = get_pids(self.cmdline_re)
+        if self.pids:
+            pids = list(self.pids)
         for pid in pids:
             if not pid in self.monitors:
-                self.monitors[pid] = CPUMonitor(pid, reset_now=reset_now)
+                try:
+                    self.monitors[pid] = CPUMonitor(pid, reset_now=reset_now)
+                except ProcessChangedException:
+                    pass
 
     def check_monitors(self):
         to_be_removed = []
         for pid, monitor in self.monitors.iteritems():
-            if not monitor.check(self.cmdline_re):
+            if not monitor.pid in self.pids:
+                if not monitor.check_cmd(self.cmdline_re):
+                    to_be_removed.append(pid)
+            elif not monitor.check_running():
                 to_be_removed.append(pid)
         for pid in to_be_removed:
-            del self.monitor[pid]
+            del self.monitors[pid]
+
+    def __len__(self):
+        return len(self.monitors)
 
 
 def periodic_sleep():
@@ -109,27 +138,69 @@ def periodic_sleep():
 
 def get_pids(cmdline_re):
     pids = []
+    self_pid = os.getpid()
     for dirname in glob.iglob('/proc/[0-9]*'):
         with open(os.path.join(dirname, _cmdline_file)) as f:
             cmdline = f.read()
         if cmdline_re.match(cmdline):
-            pids.append(int(dirname.split('/')[-1]))
+            pid = int(dirname.split('/')[-1])
+            if pid != self_pid:
+                pids.append(pid)
     return pids
+
+def get_cwd(pid):
+    return os.readlink('/proc/{}/cwd'.format(pid))
 
 def process_name(pid):
     with open(_proc_cmdline_pattern.format(pid)) as f:
         return f.read()
 
+def _parse_args():
+    parser = argparse.ArgumentParser(description='Monitor CPU use.')
+    parser.add_argument('process',
+                        help=('a single PID or a regular expression to match '
+                              'the command name in the output of ps'))
+    parser.add_argument('-l', '--label', dest='label',
+                        default='cpu_monitor',
+                        help='label to use in the logs, e.g. nginx-cpu')
+    parser.add_argument('-d', '--log-dir', dest='log_dir',
+                        default='.',
+                        help='directory for the log file')
+    return parser.parse_args()
+
+
 def main():
-    utils.configure_logging('nginx-monitor')
-    monitor = CPUMultiMonitor(re.compile('^nginx'))
-    try:
-        for duration in periodic_sleep():
-            total_time, times = monitor.update()
-            logging.info('nginx: {:.03f} / {:.03f}{}'\
-                    .format(total_time, duration, '' if times else ' [reset]'))
-    except KeyboardInterrupt:
-        pass
+    args = _parse_args()
+    logname = utils.configure_logging(args.label, dirname=args.log_dir)
+    if re.match(r'\d+', args.process):
+        pids = [int(args.process)]
+        command_regex = None
+        logging.info('Monitor process id: {}'\
+                     .format(pids[0]))
+    else:
+        pids = []
+        command_regex = re.compile(args.process)
+        logging.info('Monitor processes matching: {}'.format(args.process))
+    logging.info('Logging to: {}'.format(logname))
+    monitor = CPUMultiMonitor(cmdline_re=command_regex, pids=pids)
+    if len(monitor):
+        logging.info('{} matched PIDs: {}'.format(args.label,
+                            ', '.join(str(p) for p in monitor.monitors)))
+        try:
+            last_time = time.time()
+            for _ in periodic_sleep():
+                current_time = time.time()
+                duration = current_time - last_time
+                last_time = current_time
+                total_time, times = monitor.update()
+                logging.info(('{} cpu: {:.03f}s / real: {:.03f}s / '
+                              '{} processes {}')\
+                        .format(args.label, total_time, duration, len(times),
+                                '' if times else ' [reset]'))
+        except KeyboardInterrupt:
+            pass
+    else:
+        logging.error('No match.'.format(len(monitor)))
 
 if __name__ == "__main__":
     main()

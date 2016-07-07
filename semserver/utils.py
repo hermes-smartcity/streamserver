@@ -98,10 +98,10 @@ class StatsValue(object):
         return self.cpu_time / self.num_events
 
 
-def configure_logging(module_name, level='info'):
-    if not os.path.exists(DIRNAME_LOGGING):
-        os.makedirs(DIRNAME_LOGGING)
-    filename = os.path.join(DIRNAME_LOGGING, module_name + '.log')
+def configure_logging(module_name, level='info', dirname=DIRNAME_LOGGING):
+    if not os.path.exists(dirname):
+        os.makedirs(dirname)
+    filename = os.path.join(dirname, module_name + '.log')
     log_format = '%(asctime)-15s %(levelname)s %(message)s'
     date_format = '%Y%m%d %H:%M:%S'
     level = _log_level(level)
@@ -114,6 +114,7 @@ def configure_logging(module_name, level='info'):
                                                 datefmt=date_format))
     file_handler.setLevel(level)
     logging.getLogger('').addHandler(file_handler)
+    return filename
 
 def add_server_options(parser, default_port, stream=False):
     parser.add_argument('-p', '--port', type=int, dest='port',
