@@ -9,6 +9,7 @@ import datetime
 
 import tornado.ioloop
 import tornado.web
+import tornado.gen
 import ztreamy
 
 from . import utils
@@ -244,6 +245,23 @@ class StatsTracker(object):
                                 self.log_stats)
 
 
+class DumpLocationIndexHandler(tornado.web.RequestHandler):
+    def initialize(self, index):
+        self.index = index
+
+    @tornado.web.asynchronous
+    @tornado.gen.coroutine
+    def get(self):
+        self.index.dump_to_files('loc_data.csv', 'loc_loc.csv')
+        self.index._activate_logging_wrapper()
+        yield tornado.gen.sleep(60.0)
+        data = self.index._deactivate_logging_wrapper()
+        with open('loc_queries.csv', mode='w') as f:
+            for query in data:
+                f.write(','.join(query))
+                f.write('\n')
+        self.write('OK\n')
+
 
 def _read_cmd_arguments():
     parser = argparse.ArgumentParser( \
@@ -289,6 +307,9 @@ def main():
           'locations_short': locations_short,
           'locations_long': locations_long,
           'stats': stats_tracker,
+         }),
+        ('/dump_index', DumpLocationIndexHandler,
+         {'index': score_index,
          }),
     ])
     try:

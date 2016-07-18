@@ -96,7 +96,7 @@ class LocationIndex(object):
         SELECT lat, long, user_id, score
         FROM Locations INNER JOIN Data ON Data.id = Locations.id
         WHERE lat_min <= :1 AND lat_max >= :1
-        AND long_min <= :2 and long_max >= :2
+        AND long_min <= :2 AND long_max >= :2
         AND user_id <> :3
         ORDER BY timestamp DESC"""
 
@@ -179,6 +179,35 @@ class LocationIndex(object):
             cursor.execute('DELETE FROM Locations WHERE id <= ?', (min_id, ))
             self.conn.commit()
 
+    def dump_to_files(self, filename_data, filename_locations):
+        cursor = self.conn.cursor()
+        with open(filename_data, mode='w') as f:
+            for row in cursor.execute('SELECT * FROM Data'):
+                f.write(','.join([str(field) for field in row]))
+                f.write('\n')
+        with open(filename_locations, mode='w') as f:
+            cursor = self.conn.cursor()
+            for row in cursor.execute('SELECT * FROM Locations'):
+                f.write(','.join([str(field) for field in row]))
+                f.write('\n')
+
+    def load_from_files(self, filename_data, filename_locations):
+        cursor = self.conn.cursor()
+        cursor.execute('DELETE FROM Data')
+        cursor.execute('DELETE FROM Locations')
+        with open(filename_locations, mode='r') as f:
+            for line in f:
+                data = line.strip().split(',')
+                cursor.execute('INSERT INTO Locations VALUES (?, ?, ?, ?, ?)',
+                               data)
+        with open(filename_data, mode='r') as f:
+            for line in f:
+                data = line.strip().split(',')
+                cursor.execute('INSERT INTO Data '
+                               'VALUES (?, ?, ?, ?, ?, ?)',
+                               data)
+        self.conn.commit()
+
     def __len__(self):
         cursor = self.conn.cursor()
         return cursor.execute('SELECT COUNT(*) FROM Data').fetchone()[0]
@@ -188,3 +217,33 @@ class LocationIndex(object):
         for table_decl in self._table_definitions:
             cursor.execute(table_decl)
         self.conn.commit()
+
+    def _lookup_logging_wrapper(self, location, user_id):
+        self._queries.append(('l',
+                                     str(location.lat),
+                                     str(location.long),
+                                     user_id,
+                                     ''))
+        return self._lookup_internal(location, user_id)
+
+    def _insert_logging_wrapper(self, location, user_id, score):
+        self._queries.append(('i',
+                                     str(location.lat),
+                                     str(location.long),
+                                     user_id,
+                                     str(score)))
+        self._insert_internal(location, user_id, score)
+
+    def _activate_logging_wrapper(self):
+        self._lookup_internal = self.lookup
+        self._insert_internal = self.insert
+        self.lookup = self._lookup_logging_wrapper
+        self.insert = self._insert_logging_wrapper
+        self._queries = []
+
+    def _deactivate_logging_wrapper(self):
+        self.lookup = self._lookup_internal
+        self.insert = self._insert_internal
+        data = self._queries
+        self._queries = None
+        return data
