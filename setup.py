@@ -34,7 +34,7 @@ requirements = ['setuptools',
 
 setup(
     name = "hermes-semserver",
-    version = "0.55",
+    version = "0.56",
     author = "Jesus Arias Fisteus",
     description = ("A framework for publishing semantic events for HERMES"),
     keywords = "rdf sensors web semantic-sensor-web",

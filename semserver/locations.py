@@ -88,17 +88,22 @@ class LocationIndex(object):
             long_min,
             long_max
         )""",
-        """
-        CREATE INDEX TimestampIndex ON Data(timestamp)""",
+#        """
+#        CREATE INDEX TimestampIndex ON Data(timestamp)""",
     ]
 
-    _query_lookup = """
+    _query_lookup_unordered = """
+        SELECT lat, long, user_id, score
+        FROM Locations INNER JOIN Data ON Data.id = Locations.id
+        WHERE lat_min <= :1 AND lat_max >= :1
+        AND long_min <= :2 AND long_max >= :2"""
+
+    _query_lookup_ordered = """
         SELECT lat, long, user_id, score
         FROM Locations INNER JOIN Data ON Data.id = Locations.id
         WHERE lat_min <= :1 AND lat_max >= :1
         AND long_min <= :2 AND long_max >= :2
-        AND user_id <> :3
-        ORDER BY timestamp DESC"""
+        ORDER BY Data.id DESC"""
 
     _query_lookup_same_user = """
         SELECT lat, long, user_id, score
@@ -108,7 +113,8 @@ class LocationIndex(object):
         AND (user_id <> :3 OR timestamp < :4)
         ORDER BY timestamp DESC"""
 
-    def __init__(self, search_radius, ttl=600, allow_same_user=False):
+    def __init__(self, search_radius, ttl=600, allow_same_user=False,
+                 to_filename=None, ordered_lookup=True):
         """ Create a new index.
 
         The parameter `search_radius` should contain the radius
@@ -122,9 +128,16 @@ class LocationIndex(object):
         if allow_same_user:
             # Replace the lookup method
             self.lookup = self._lookup_allow_same_user
-        self.conn = sqlite3.connect(':memory:')
+        if not to_filename:
+            self.conn = sqlite3.connect(':memory:')
+        else:
+            self.conn = sqlite3.connect(to_filename)
         self._create_tables()
         self.next_id = 1
+        if ordered_lookup:
+            self._query_lookup = self._query_lookup_ordered
+        else:
+            self._query_lookup = self._query_lookup_unordered
         logging.debug(('Initialized LocationIndex, radius: {}m, '
                        'ttl: {}s, allow_same_user: {}')\
                       .format(search_radius, ttl, allow_same_user))
@@ -147,9 +160,9 @@ class LocationIndex(object):
     def lookup(self, location, user_id):
         cursor = self.conn.cursor()
         users = set()
+        users.add(user_id)
         for row in cursor.execute(self._query_lookup,
-                                  (location.lat, location.long,
-                                   user_id)):
+                                  (location.lat, location.long)):
             if not row[2] in users:
                 users.add(row[2])
                 yield (Location(row[0], row[1]), row[3])
@@ -206,6 +219,7 @@ class LocationIndex(object):
                 cursor.execute('INSERT INTO Data '
                                'VALUES (?, ?, ?, ?, ?, ?)',
                                data)
+                self.next_id = int(data[0]) + 1
         self.conn.commit()
 
     def __len__(self):

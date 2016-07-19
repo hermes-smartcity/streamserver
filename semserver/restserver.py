@@ -140,12 +140,11 @@ class DriverScoresHandler(tornado.web.RequestHandler):
 
 
 class ScoreIndex(locations.LocationIndex):
-    def __init__(self, ioloop, ttl=600, allow_same_user=False):
+    def __init__(self, ioloop, ttl=600, **kwargs):
         # By now, locations and scores stay 3 days in the DB.
         # In the future, about 30 min or less would be enough
 #        super(ScoreIndex, self).__init__(500.0, ttl=259200)
-        super(ScoreIndex, self).__init__(500.0, ttl=ttl,
-                                         allow_same_user=allow_same_user)
+        super(ScoreIndex, self).__init__(500.0, ttl=ttl, **kwargs)
         # Roll every ttl / 4 (seconds) = ttl * 250 (milliseconds)
         tornado.ioloop.PeriodicCallback(self.roll, ttl * 250, ioloop).start()
 
@@ -290,7 +289,8 @@ def main():
     ## steps_client = StepsDataClient(args.collectors)
     score_index = ScoreIndex(tornado.ioloop.IOLoop.instance(),
                              ttl=args.index_ttl,
-                             allow_same_user=args.allow_same_user)
+                             allow_same_user=args.allow_same_user,
+                             ordered_lookup=False)
     locations_short = LatestLocations(10.0, tornado.ioloop.IOLoop.instance())
     locations_long = LatestLocations(300.0, tornado.ioloop.IOLoop.instance())
     stats_tracker = StatsTracker(score_index, locations_short, locations_long,
