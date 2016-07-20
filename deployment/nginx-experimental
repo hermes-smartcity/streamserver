@@ -1,0 +1,19 @@
+upstream hermesexpfront {
+    server 127.0.0.1:9210;
+    server 127.0.0.1:9211;
+    server 127.0.0.1:9212;
+    server 127.0.0.1:9213;
+    server 127.0.0.1:9214;
+    server 127.0.0.1:9215;
+}
+
+server {
+    listen 9220 backlog=2048;
+    location / {
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_pass http://hermesexpfront;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        keepalive_requests 100000;
+    }
+}
