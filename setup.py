@@ -28,7 +28,7 @@ if sys.version_info[0] != 2 or sys.version_info[1] not in [7]:
 
 # Dependencies
 requirements = ['setuptools',
-                'ztreamy>=0.4.2.dev11',
+                'ztreamy>=0.5',
                 ]
 
 
