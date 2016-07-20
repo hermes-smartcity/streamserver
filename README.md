@@ -107,3 +107,21 @@ Otherwise, the system won't be able to locate the `supervisor` executable files.
 The `. venv/bin/activate` command activates it for your current terminal.
 Closing the terminal or running `deactivate` deactivates it.
 The terminal's prompt shows an indication when it's active.
+
+
+Upgrading the software
+------------------------
+
+You can get, install and deploy new versions of this software:
+
+```shell
+. venv/bin/activate
+cd streamserver
+git pull
+python setup.py install
+cd ..
+```
+
+Follow the same procedure (except `git pull`)
+if you've changed the sources and want to install
+the software with your changes.
