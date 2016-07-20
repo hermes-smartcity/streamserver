@@ -43,4 +43,5 @@ setup(
     long_description=read('README'),
     install_requires = requirements,
     test_suite = 'tests.get_tests',
+    scripts = ['bin/cpu_monitor']
 )
