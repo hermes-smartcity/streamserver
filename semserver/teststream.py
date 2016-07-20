@@ -20,7 +20,8 @@ def main():
         buffering_time = args.buffer * 1000
     else:
         buffering_time = None
-    utils.configure_logging('teststream', level=args.log_level)
+    utils.configure_logging('teststream', level=args.log_level,
+                            disable_stderr=args.disable_stderr)
     server = ztreamy.StreamServer(args.port)
     test_stream = ztreamy.Stream('test',
                                       parse_event_body=True,

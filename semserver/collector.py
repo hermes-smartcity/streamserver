@@ -368,7 +368,8 @@ def main():
         buffering_time = args.buffer * 1000
     else:
         buffering_time = None
-    utils.configure_logging('collector', level=args.log_level)
+    utils.configure_logging('collector', level=args.log_level,
+                            disable_stderr=args.disable_stderr)
     server = _create_stream_server( \
                                 args.port,
                                 buffering_time,

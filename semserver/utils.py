@@ -98,22 +98,28 @@ class StatsValue(object):
         return self.cpu_time / self.num_events
 
 
-def configure_logging(module_name, level='info', dirname=DIRNAME_LOGGING):
+def configure_logging(module_name, level='info', disable_stderr=False,
+                      dirname=DIRNAME_LOGGING):
     if not os.path.exists(dirname):
         os.makedirs(dirname)
     filename = os.path.join(dirname, module_name + '.log')
     log_format = '%(asctime)-15s %(levelname)s %(message)s'
     date_format = '%Y%m%d %H:%M:%S'
     level = _log_level(level)
-    logging.basicConfig(level=level,
-                        format=log_format,
-                        datefmt=date_format)
-    # define a Handler which writes INFO messages or higher to the sys.stderr
-    file_handler = logging.handlers.WatchedFileHandler(filename)
-    file_handler.setFormatter(logging.Formatter(fmt=log_format,
-                                                datefmt=date_format))
-    file_handler.setLevel(level)
-    logging.getLogger('').addHandler(file_handler)
+    if not disable_stderr:
+        logging.basicConfig(level=level,
+                            format=log_format,
+                            datefmt=date_format)
+        file_handler = logging.handlers.WatchedFileHandler(filename)
+        file_handler.setFormatter(logging.Formatter(fmt=log_format,
+                                                    datefmt=date_format))
+        file_handler.setLevel(level)
+        logging.getLogger('').addHandler(file_handler)
+    else:
+        logging.basicConfig(filename=filename,
+                            level=level,
+                            format=log_format,
+                            datefmt=date_format)
     return filename
 
 def add_server_options(parser, default_port, stream=False):
@@ -122,6 +128,9 @@ def add_server_options(parser, default_port, stream=False):
     parser.add_argument('--log-level', dest='log_level',
                         choices=['warn', 'info', 'debug'],
                         default='info')
+    parser.add_argument('--disable-stderr', dest='disable_stderr',
+                        action='store_true',
+                        help='disable logging to stderr')
     if stream:
         parser.add_argument('-b', '--buffer', type=float, dest='buffer',
                             default=2.0,
