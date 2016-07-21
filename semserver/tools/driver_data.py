@@ -6,11 +6,14 @@ import collections
 import argparse
 import copy
 import logging
+import traceback
 
 import dateutil
 import dateutil.parser
-
+import requests
 import ztreamy
+
+from .. import locations as loc
 
 
 simple_event_types = (
@@ -27,6 +30,10 @@ ignore_source_ids = (
 
 _tz_madrid = dateutil.tz.tz.gettz('Europe/Madrid')
 _tz_london = dateutil.tz.tz.gettz('Europe/London')
+
+
+ROAD_INFO_URL = ('http://cronos.lbd.org.es'
+                 '/hermes/api/smartdriver/network/link')
 
 
 class Record(object):
@@ -48,6 +55,7 @@ class Record(object):
         self.min_value = None
         self.max_value = None
         self.rr_value = None
+        self.road_info = None
         self._timestamp = None
         self._time = None
         if default_tz is not None:
@@ -71,12 +79,54 @@ class Record(object):
                                                  default_tz=self.default_tz)
         return self._time
 
+    @property
+    def link_id(self):
+        if self.road_info is not None:
+            return self.road_info.link_id
+        else:
+            return None
+
+    @property
+    def max_speed(self):
+        if self.road_info is not None:
+            return self.road_info.max_speed
+        else:
+            return None
+
+    @property
+    def link_name(self):
+        if self.road_info is not None:
+            return self.road_info.link_name
+        else:
+            return None
+
+    @property
+    def link_type(self):
+        if self.road_info is not None:
+            return self.road_info.link_type
+        else:
+            return None
+
+    @property
+    def length(self):
+        if self.road_info is not None:
+            return self.road_info.length
+        else:
+            return None
+
+    @property
+    def position(self):
+        if self.road_info is not None:
+            return self.road_info.position
+        else:
+            return None
+
     def as_row(self):
         self.check()
         return self._as_row()
 
     def _as_row(self):
-        return [str(v) if v is not None else '' \
+        return [unicode(v) if v is not None else '' \
                 for v in (self.time,
                           self.record_type,
                           self.user_id,
@@ -96,6 +146,12 @@ class Record(object):
                           self.min_value,
                           self.max_value,
                           self.rr_value,
+                          self.link_id,
+                          self.max_speed,
+                          self.link_name,
+                          self.link_type,
+                          self.length,
+                          self.position,
                           )]
 
     def check(self):
@@ -112,6 +168,68 @@ class Record(object):
     def clone(self):
         return copy.copy(self)
 
+RoadInfo = collections.namedtuple('RoadInfo',
+                                  ('link_id',
+                                   'max_speed',
+                                   'link_name',
+                                   'link_type',
+                                   'length',
+                                   'position',),
+                                   verbose=False)
+
+_road_info_session = requests.Session()
+_road_info_cache = {}
+_road_info_region_center = loc.Location(40.416687, -3.703347)
+_road_info_region_radius = 20000
+
+def road_info_from_dict(data):
+    link_name = data['linkName']
+    if link_name is not None:
+        link_name = link_name.replace(',', '_')
+    else:
+        link_name = ''
+    return RoadInfo(
+        data['linkId'],
+        data['maxSpeed'],
+        link_name,
+        data['linkType'],
+        data['length'],
+        data['position'])
+
+def get_road_info(lat, long):
+    key = (lat, long)
+    if key in _road_info_cache:
+        data =_road_info_cache[key]
+    else:
+        data = _get_road_info_internal(lat, long)
+        _road_info_cache[key] = data
+    return data
+
+def get_road_info_region(lat, long):
+    position = loc.Location(lat, long)
+    if position.distance(_road_info_region_center) <= _road_info_region_radius:
+        return get_road_info(lat, long)
+    else:
+        return None
+
+def _get_road_info_internal(lat, long):
+    params = {
+        'currentLat': lat,
+        'currentLong': long,
+        'previousLat': lat,
+        'previousLong': long,
+    }
+    info = None
+    try:
+        r = _road_info_session.get(ROAD_INFO_URL, params=params)
+        if r.text:
+            data = r.json()
+            info = road_info_from_dict(data)
+    except:
+        print('lat/long: {}, {}'.format(lat, long))
+        print(data)
+        traceback.print_exc()
+    return info
 
 def tz_for_latitude(latitude):
     # Trick for some timestamps that came without timezone
@@ -260,13 +378,19 @@ def extract_data_section_event(event):
                 records.append(heart_record)
             if rr_record.mean_value > 0:
                 records.append(rr_record)
+            # Enrich data with road info
+            if rr_record.mean_value > 0:
+                for record in records:
+                    record.road_info = get_road_info_region(record.latitude,
+                                                            record.longitude)
     return records
 
 def write_records(records):
     logging.info('Writing {} records'.format(len(records)))
     with open('data.csv', mode='a') as f:
         for record in records:
-            f.write(','.join(record.as_row()))
+            line = ','.join(record.as_row())
+            f.write(line.encode('utf-8'))
             f.write('\n')
 
 def clear_records_file():
