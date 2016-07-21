@@ -12,12 +12,13 @@ This software runs on Linux.
 In order to deploy it you need `python 2.7` with its development headers
 and `virtualenv`.
 Additionally, you need `curl` and its development packages,
-as well as the `nginx` web server.
+as well as the `nginx` web server
+and the git version control system.
 Install all of them through your distribution's package manager.
 For example, in Debian and Ubuntu:
 
 ```shell
-sudo apt-get install python2.7 python2.7-dev python-virtualenv curl libcurl3 libcurl4-openssl-dev nginx-light
+sudo apt-get install python2.7 python2.7-dev python-virtualenv curl libcurl3 libcurl4-openssl-dev nginx-light git
 ```
 
 Then, create a directory anywhere within your home account.
@@ -43,9 +44,9 @@ which will act as a proxy server between the mobile apps
 and the frontend servers:
 
 ```shell
-cp streamserver/deployment/nginx-experimental /etc/nginx/sites-available
+sudo cp streamserver/deployment/nginx-experimental /etc/nginx/sites-available
 cd /etc/nginx/sites-enabled
-ln -s ../sites-available/nginx-experimental .
+sudo ln -s ../sites-available/nginx-experimental .
 cd -
 sudo service nginx restart
 ```
