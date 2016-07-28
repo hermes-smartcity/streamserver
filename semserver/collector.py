@@ -182,8 +182,10 @@ class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
     def on_response_timeout(self):
         # Respond anyway
         if not self.finished:
-            logging.warning('Publish timeout, responding to the request')
             self.feedback.timeout()
+            logging.warning('Publish timeout: {}/{}'\
+                            .format(self.feedback.scores.status,
+                                    self.feedback.road_info.status))
             self.respond()
 
     def respond(self):
