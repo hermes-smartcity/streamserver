@@ -1,4 +1,4 @@
-upstream hermesexpfront {
+upstream hermesprodfront {
     server 127.0.0.1:9110;
     server 127.0.0.1:9111;
     server 127.0.0.1:9112;
@@ -11,7 +11,7 @@ server {
     listen 9100 backlog=2048;
     location / {
         proxy_set_header X-Real-IP $remote_addr;
-        proxy_pass http://hermesexpfront;
+        proxy_pass http://hermesprodfront;
         proxy_http_version 1.1;
         proxy_set_header Connection "";
         keepalive_requests 100000;

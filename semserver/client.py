@@ -47,7 +47,7 @@ def read_cmd_options():
     if len(remaining) >= 1:
         options.stream_urls = remaining
     else:
-        options.stream_urls = ['http://localhost:9100/collector/stream']
+        options.stream_urls = ['http://localhost:9109/backend/stream']
     return options
 
 def main():
