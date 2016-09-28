@@ -185,7 +185,9 @@ def configure_logging(module_name, level='info', disable_stderr=False,
         logging.basicConfig(level=level,
                             format=log_format,
                             datefmt=date_format)
-        file_handler = logging.handlers.WatchedFileHandler(filename)
+        file_handler = logging.handlers.TimedRotatingFileHandler(
+                                                 filename,
+                                                 when='midnight')
         file_handler.setFormatter(logging.Formatter(fmt=log_format,
                                                     datefmt=date_format))
         file_handler.setLevel(level)
@@ -244,9 +246,11 @@ def main():
             duration = current_time - last_time
             last_time = current_time
             total_time, times = monitor.update()
-            logging.info(('{} cpu: {:.03f}s / real: {:.03f}s / '
+            logging.info(('{}: {:.03f}s / real: {:.03f}s / '
                           '{} processes')\
                     .format(args.label, total_time, duration, len(times)))
+            logging.info('cpu 0,{:.03f},{:.03f}'\
+                         .format(total_time, duration))
             with open(csv_filename, mode='a') as f:
                 f.write('{},{:.03f},{:.03f},{}\n'\
                         .format(last_time, total_time, duration, len(times)))

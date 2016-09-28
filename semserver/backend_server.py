@@ -46,9 +46,12 @@ class BackendStream(ztreamy.Stream):
 
     def _periodic_stats(self):
         stats = self.stats_tracker.compute_cycle()
-        logging.info(('{0} (60s): {1.num_events} ev / {1.cpu_time:.02f}s '
-                      ' / u: {1.utilization:.03f}')\
+        logging.info('{0}: {1.num_events} ev / {1.cpu_time:.02f}s '
+                     '/ u: {1.utilization:.03f}'\
                      .format(self.label, stats))
+        logging.info('cpu {0.num_events},{0.cpu_time:.03f},'
+                     '{0.real_time:.03f}'\
+                     .format(stats))
         self._schedule_next_stats_period()
 
     def _schedule_next_stats_period(self):
@@ -93,7 +96,8 @@ def main():
         buffering_time = args.buffer * 1000
     else:
         buffering_time = None
-    utils.configure_logging('backend', level=args.log_level,
+    utils.configure_logging('backend-{}'.format(args.port),
+                            level=args.log_level,
                             disable_stderr=args.disable_stderr)
     server = _create_stream_server( \
                                 args.port,

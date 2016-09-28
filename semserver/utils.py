@@ -110,7 +110,9 @@ def configure_logging(module_name, level='info', disable_stderr=False,
         logging.basicConfig(level=level,
                             format=log_format,
                             datefmt=date_format)
-        file_handler = logging.handlers.WatchedFileHandler(filename)
+        file_handler = logging.handlers.TimedRotatingFileHandler(
+                                                 filename,
+                                                 when='midnight')
         file_handler.setFormatter(logging.Formatter(fmt=log_format,
                                                     datefmt=date_format))
         file_handler.setLevel(level)

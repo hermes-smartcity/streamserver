@@ -179,6 +179,7 @@ PeriodStats = collections.namedtuple('PeriodStats',
                                       'road_info_requests',
                                       'scores',
                                       'total_time',
+                                      'real_time',
                                       'size_score_index',
                                       'size_locations_short',
                                       'size_locations_long'),
@@ -209,12 +210,14 @@ class StatsTracker(object):
         current_times = os.times()
         user_time = current_times[0] - self.latest_times[0]
         sys_time = current_times[1] - self.latest_times[1]
+        real_time = current_times[4] - self.latest_times[4]
         total_time = user_time + sys_time
         stats = PeriodStats(self.num_requests,
                             self.num_scores_requests,
                             self.num_road_info_requests,
                             self.num_scores,
                             total_time,
+                            real_time,
                             len(self.score_index),
                             len(self.locations_short),
                             len(self.locations_long))
@@ -227,15 +230,18 @@ class StatsTracker(object):
 
     def log_stats(self):
         stats = self.compute_cycle()
-        logging.info('restserver (60s): '
-                     '{} r / {:.02f}s / {} s / {} ri / {} ss'.\
-                     format(stats.requests, stats.total_time,
-                            stats.scores_requests, stats.road_info_requests,
-                            stats.scores))
+        logging.info('restserver: '
+                     '{0.requests} r / {0.total_time:.02f}s '
+                     '/ {0.scores_requests} s / {0.road_info_requests} ri '
+                     '/ {0.scores} ss'\
+                     .format(stats))
         logging.info('sizes: {} sc_idx / {} shrt_loc / {} lng_loc'.\
                      format(stats.size_score_index,
                             stats.size_locations_short,
                             stats.size_locations_long))
+        logging.info('cpu {0.requests},{0.total_time:.03f},'
+                     '{0.real_time:.03f}'\
+                     .format(stats))
         self._schedule_next_stats_period()
 
     def _schedule_next_stats_period(self):
@@ -283,7 +289,8 @@ def _read_cmd_arguments():
 
 def main():
     args = _read_cmd_arguments()
-    utils.configure_logging('restserver', level=args.log_level,
+    utils.configure_logging('restserver-{}'.format(args.port),
+                            level=args.log_level,
                             disable_stderr=args.disable_stderr)
     ## driver_client = DriverDataClient(args.collectors)
     ## sleep_client = SleepDataClient(args.collectors)
