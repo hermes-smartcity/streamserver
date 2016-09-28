@@ -8,7 +8,7 @@ upstream hermesexpfront {
 }
 
 server {
-    listen 9220 backlog=2048;
+    listen 9220 backlog=4096;
     location / {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_pass http://hermesexpfront;
