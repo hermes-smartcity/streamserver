@@ -6,6 +6,7 @@ import os
 import logging
 import collections
 import datetime
+import time
 
 import tornado.ioloop
 import tornado.web
@@ -240,8 +241,8 @@ class StatsTracker(object):
                             stats.size_locations_short,
                             stats.size_locations_long))
         logging.info('cpu {0.requests},{0.total_time:.03f},'
-                     '{0.real_time:.03f}'\
-                     .format(stats))
+                     '{0.real_time:.03f},{1:.03f}'\
+                     .format(stats, time.time()))
         self._schedule_next_stats_period()
 
     def _schedule_next_stats_period(self):

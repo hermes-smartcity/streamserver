@@ -249,8 +249,8 @@ def main():
             logging.info(('{}: {:.03f}s / real: {:.03f}s / '
                           '{} processes')\
                     .format(args.label, total_time, duration, len(times)))
-            logging.info('cpu 0,{:.03f},{:.03f}'\
-                         .format(total_time, duration))
+            logging.info('cpu 0,{:.03f},{:.03f},{:.03f}'\
+                         .format(total_time, duration, last_time))
             with open(csv_filename, mode='a') as f:
                 f.write('{},{:.03f},{:.03f},{}\n'\
                         .format(last_time, total_time, duration, len(times)))

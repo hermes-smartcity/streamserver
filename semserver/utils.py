@@ -7,6 +7,7 @@ import gzip
 import json
 import collections
 import itertools
+import time
 
 
 DIRNAME_LOGGING = 'logs-semserver'
@@ -123,6 +124,14 @@ def configure_logging(module_name, level='info', disable_stderr=False,
                             format=log_format,
                             datefmt=date_format)
     return filename
+
+def log_stats_value(label, stats):
+    logging.info('{0}: {1.num_events} ev / {1.cpu_time:.02f}s '
+                 '/ u: {1.utilization:.03f}'\
+                 .format(label, stats))
+    logging.info('cpu {0.num_events},{0.cpu_time:.03f},'
+                 '{0.real_time:.03f},{1:.03f}'\
+                 .format(stats, time.time()))
 
 def add_server_options(parser, default_port, stream=False):
     parser.add_argument('-p', '--port', type=int, dest='port',
