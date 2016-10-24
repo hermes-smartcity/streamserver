@@ -35,7 +35,8 @@ class CollectorStream(ztreamy.Stream):
                  disable_road_info=False,
                  backend_stream=None,
                  score_info_url=DEFAULT_SCORE_INFO_URL,
-                 road_info_url=DEFAULT_SCORE_INFO_URL):
+                 road_info_url=DEFAULT_SCORE_INFO_URL,
+                 log_event_time=None):
         super(CollectorStream, self).__init__('collector',
                                 label=label,
                                 num_recent_events=2**16,
@@ -59,6 +60,7 @@ class CollectorStream(ztreamy.Stream):
         self.score_info_url = score_info_url
         self.road_info_url = road_info_url
         self.stats_tracker = utils.StatsTracker(self)
+        self.events_tracker = utils.EventsTracker.create(log_event_time, self)
         if backend_stream:
             self.backend_relay = BackendStreamRelay(self, backend_stream, 0.1,
                                                     ioloop=self.ioloop)
@@ -85,8 +87,8 @@ class CollectorStream(ztreamy.Stream):
         self.latest_locations.roll()
 
     def _periodic_stats(self):
-        stats = self.stats_tracker.compute_cycle()
-        utils.log_stats_value(self.label, stats)
+        utils.log_stats_value(self.label, self.stats_tracker.compute_cycle())
+        self.events_tracker.log()
         self._schedule_next_stats_period()
 
     def _schedule_next_stats_period(self):
@@ -162,6 +164,7 @@ class PublishRequestHandler(ztreamy.server.EventPublishHandlerAsync):
     def post(self):
         if self.stream.running:
             events = self.get_and_dispatch_events(finish_request=False)
+            self.stream.events_tracker.track_events(events)
             if (not self.stream.disable_feedback
                 and events
                 and events[0].application_id == 'SmartDriver'
@@ -306,7 +309,7 @@ class LatestLocationsBuffer(utils.LatestValueBuffer):
         return answer
 
 
-def _read_cmd_arguments():
+def read_cmd_arguments(default_port=9100):
     parser = argparse.ArgumentParser( \
                     description='Run the HERMES collector server.')
     parser.add_argument('--disable-feedback', dest='disable_feedback',
@@ -323,7 +326,11 @@ def _read_cmd_arguments():
     parser.add_argument('-r', '--road-info-url', dest='road_info_url',
                         default=DEFAULT_ROAD_INFO_URL,
                         help='Road info service URL')
-    utils.add_server_options(parser, 9100, stream=True)
+    parser.add_argument('-l', '--log-event-time', dest='log_event_time',
+                        default=None,
+                        help=('Log event arrival time ("all", '
+                              '"0", "00", "000", etc.'))
+    utils.add_server_options(parser, default_port, stream=True)
     args = parser.parse_args()
     return args
 
@@ -333,7 +340,8 @@ def _create_stream_server(port, buffering_time, disable_feedback=False,
                           disable_persistence=False,
                           backend_stream=None,
                           score_info_url=DEFAULT_SCORE_INFO_URL,
-                          road_info_url=DEFAULT_ROAD_INFO_URL):
+                          road_info_url=DEFAULT_ROAD_INFO_URL,
+                          log_event_time=None):
     server = ztreamy.StreamServer(port)
     collector_stream = CollectorStream(buffering_time,
                                        disable_feedback=disable_feedback,
@@ -341,7 +349,8 @@ def _create_stream_server(port, buffering_time, disable_feedback=False,
                                        disable_persistence=disable_persistence,
                                        backend_stream=backend_stream,
                                        score_info_url=score_info_url,
-                                       road_info_url=road_info_url)
+                                       road_info_url=road_info_url,
+                                       log_event_time=log_event_time)
     if not backend_stream:
         type_relays = EventTypeRelays(collector_stream,
                                       'SmartDriver',
@@ -363,7 +372,7 @@ def _create_stream_server(port, buffering_time, disable_feedback=False,
     return server
 
 def main():
-    args = _read_cmd_arguments()
+    args = read_cmd_arguments()
     if args.buffer > 0:
         buffering_time = args.buffer * 1000
     else:
@@ -378,7 +387,8 @@ def main():
                                 disable_persistence=args.disable_persistence,
                                 backend_stream=args.backend_stream,
                                 score_info_url=args.score_info_url,
-                                road_info_url=args.road_info_url)
+                                road_info_url=args.road_info_url,
+                                log_event_time=args.log_event_time)
     ztreamy.client.configure_max_clients(1000)
     try:
         server.start()

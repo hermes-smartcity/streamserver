@@ -9,6 +9,8 @@ import collections
 import itertools
 import time
 
+import ztreamy
+
 
 DIRNAME_LOGGING = 'logs-semserver'
 
@@ -97,6 +99,65 @@ class StatsValue(object):
     @property
     def time_per_event(self):
         return self.cpu_time / self.num_events
+
+
+class EventsTracker(object):
+    """Tracks when each event is received."""
+    def __init__(self, stream, filter=None):
+        self.stream = stream
+        self.filter = filter
+        self.event_times = []
+
+    def track_event(self, event):
+        if not self.filter or self.filter(event):
+            self.event_times.append(EventTimestamp(event))
+
+    def track_events(self, events):
+        for event in events:
+            self.track_event(event)
+
+    def log(self):
+        for record in self.event_times:
+            logging.info('event_time {0.event_id},{0.timestamp}'
+                         .format(record))
+        self.event_times = []
+
+    @staticmethod
+    def create(filter_expression, stream):
+        if filter_expression:
+            if filter_expression == 'all':
+                filter = None
+            else:
+                filter = lambda e: e.event_id.endswith(filter_expression)
+            events_tracker = EventsTracker(stream, filter=filter)
+        else:
+            events_tracker = NullEventsTracker()
+        return events_tracker
+
+
+class NullEventsTracker(object):
+    """Non-tracking version of EventsTracker."""
+    def __init__(self):
+        pass
+
+    def track_event(self, event):
+        pass
+
+    def track_events(self, events):
+        pass
+
+    def log(self):
+        pass
+
+
+class EventTimestamp(object):
+    def __init__(self, event):
+        self.event_id = event.event_id
+        self.time = time.time()
+
+    @property
+    def timestamp(self):
+        return ztreamy.get_timestamp(self.time)
 
 
 def configure_logging(module_name, level='info', disable_stderr=False,
