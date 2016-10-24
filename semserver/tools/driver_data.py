@@ -7,6 +7,7 @@ import argparse
 import copy
 import logging
 import traceback
+import cPickle
 
 import dateutil
 import dateutil.parser
@@ -81,42 +82,48 @@ class Record(object):
 
     @property
     def link_id(self):
-        if self.road_info is not None:
+        if (self.road_info is not None
+            and not self.road_info.empty):
             return self.road_info.link_id
         else:
             return None
 
     @property
     def max_speed(self):
-        if self.road_info is not None:
+        if (self.road_info is not None
+            and not self.road_info.empty):
             return self.road_info.max_speed
         else:
             return None
 
     @property
     def link_name(self):
-        if self.road_info is not None:
+        if (self.road_info is not None
+            and not self.road_info.empty):
             return self.road_info.link_name
         else:
             return None
 
     @property
     def link_type(self):
-        if self.road_info is not None:
+        if (self.road_info is not None
+            and not self.road_info.empty):
             return self.road_info.link_type
         else:
             return None
 
     @property
     def length(self):
-        if self.road_info is not None:
+        if (self.road_info is not None
+            and not self.road_info.empty):
             return self.road_info.length
         else:
             return None
 
     @property
     def position(self):
-        if self.road_info is not None:
+        if (self.road_info is not None
+            and not self.road_info.empty):
             return self.road_info.position
         else:
             return None
@@ -174,13 +181,10 @@ RoadInfo = collections.namedtuple('RoadInfo',
                                    'link_name',
                                    'link_type',
                                    'length',
-                                   'position',),
+                                   'position',
+                                   'empty',
+                                   'error',),
                                    verbose=False)
-
-_road_info_session = requests.Session()
-_road_info_cache = {}
-_road_info_region_center = loc.Location(40.416687, -3.703347)
-_road_info_region_radius = 20000
 
 def road_info_from_dict(data):
     link_name = data['linkName']
@@ -194,7 +198,45 @@ def road_info_from_dict(data):
         link_name,
         data['linkType'],
         data['length'],
-        data['position'])
+        data['position'],
+        False,
+        False)
+
+def empty_road_info(error=False):
+    return RoadInfo(
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        True,
+        error)
+
+_road_info_session = requests.Session()
+_road_info_cache = {}
+_road_info_region_center = loc.Location(40.416687, -3.703347)
+_road_info_region_radius = 20000
+
+def load_info_cache(cache_file):
+    global _road_info_cache
+    try:
+        with open(cache_file, mode='rb') as f:
+            _road_info_cache = cPickle.load(f)
+    except Exception as e:
+        _road_info_cache = {}
+        logging.warning('Unable to load road info cache from {}'
+                        .format(cache_file))
+        logging.warning(str(e))
+
+def save_info_cache(cache_file):
+    try:
+        with open(cache_file, mode='wb') as f:
+            cPickle.dump(_road_info_cache, f)
+    except Exception as e:
+        logging.warning('Unable to save road info cache to {}'
+                        .format(cache_file))
+        logging.warning(str(e))
 
 def get_road_info(lat, long):
     key = (lat, long)
@@ -202,7 +244,8 @@ def get_road_info(lat, long):
         data =_road_info_cache[key]
     else:
         data = _get_road_info_internal(lat, long)
-        _road_info_cache[key] = data
+        if not data.error:
+            _road_info_cache[key] = data
     return data
 
 def get_road_info_region(lat, long):
@@ -219,16 +262,20 @@ def _get_road_info_internal(lat, long):
         'previousLat': lat,
         'previousLong': long,
     }
-    info = None
     try:
         r = _road_info_session.get(ROAD_INFO_URL, params=params)
         if r.text:
             data = r.json()
             info = road_info_from_dict(data)
+        else:
+            info = empty_road_info(error=False)
+    except KeyboardInterrupt:
+        raise
     except:
         print('lat/long: {}, {}'.format(lat, long))
-        print(data)
+        ## print(data)
         traceback.print_exc()
+        info = empty_road_info(error=True)
     return info
 
 def tz_for_latitude(latitude):
@@ -379,10 +426,9 @@ def extract_data_section_event(event):
             if rr_record.mean_value > 0:
                 records.append(rr_record)
             # Enrich data with road info
-            if rr_record.mean_value > 0:
-                for record in records:
-                    record.road_info = get_road_info_region(record.latitude,
-                                                            record.longitude)
+            for record in records:
+                record.road_info = get_road_info_region(record.latitude,
+                                                        record.longitude)
     return records
 
 def write_records(records):
@@ -434,6 +480,9 @@ def _parse_args():
     parser.add_argument('-f', '--from-date', dest='from_date',
                         default=None,
                         help='only from the given RFC3339 date')
+    parser.add_argument('-c', '--road-info-cache', dest='road_info_cache_file',
+                        default=None,
+                        help='file for loading/writing the road info cache')
     return parser.parse_args()
 
 def main():
@@ -443,7 +492,15 @@ def main():
                         format=log_format,
                         datefmt=date_format)
     args = _parse_args()
-    process_file(args.events_file, from_timestamp=args.from_date)
+    if load_info_cache:
+        load_info_cache(args.road_info_cache_file)
+    try:
+        process_file(args.events_file, from_timestamp=args.from_date)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        if load_info_cache:
+            save_info_cache(args.road_info_cache_file)
 
 if __name__ == "__main__":
     main()
