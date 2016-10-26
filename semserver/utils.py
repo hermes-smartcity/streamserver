@@ -172,18 +172,14 @@ def configure_logging(module_name, level='info', disable_stderr=False,
         logging.basicConfig(level=level,
                             format=log_format,
                             datefmt=date_format)
-        file_handler = logging.handlers.TimedRotatingFileHandler(
-                                                 filename,
-                                                 when='midnight')
-        file_handler.setFormatter(logging.Formatter(fmt=log_format,
-                                                    datefmt=date_format))
-        file_handler.setLevel(level)
-        logging.getLogger('').addHandler(file_handler)
-    else:
-        logging.basicConfig(filename=filename,
-                            level=level,
-                            format=log_format,
-                            datefmt=date_format)
+    logger = logging.getLogger('')
+    logger.setLevel(level)
+    file_handler = logging.handlers.TimedRotatingFileHandler(filename,
+                                                             when='midnight')
+    file_handler.setFormatter(logging.Formatter(fmt=log_format,
+                                                datefmt=date_format))
+    file_handler.setLevel(level)
+    logger.addHandler(file_handler)
     return filename
 
 def log_stats_value(label, stats):
