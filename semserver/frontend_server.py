@@ -1,5 +1,3 @@
-import argparse
-
 import ztreamy.client
 
 from . import utils
@@ -26,7 +24,8 @@ def _create_stream_server(port, buffering_time, disable_feedback=False,
     return server
 
 def main():
-    args = collector.read_cmd_arguments(default_port=9110)
+    args = collector.read_cmd_arguments(default_port=9110,
+                                        is_frontend_server=True)
     if args.buffer > 0:
         buffering_time = args.buffer * 1000
     else:

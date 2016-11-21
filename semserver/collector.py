@@ -107,6 +107,8 @@ class BackendStreamRelay(ztreamy.LocalClient):
                                     backend_stream_url,
                                     buffering_time=buffering_time,
                                     io_loop=ioloop)
+        logging.info('Connected to backend stream {}'
+                     .format(backend_stream_url))
 
     def process_events(self, events):
         self.publisher.publish_events(events)
@@ -309,7 +311,11 @@ class LatestLocationsBuffer(utils.LatestValueBuffer):
         return answer
 
 
-def read_cmd_arguments(default_port=9100):
+def read_cmd_arguments(default_port=9100, is_frontend_server=False):
+    if is_frontend_server:
+        default_backend_stream = 'http://localhost:9109/backend/'
+    else:
+        default_backend_stream = None
     parser = argparse.ArgumentParser( \
                     description='Run the HERMES collector server.')
     parser.add_argument('--disable-feedback', dest='disable_feedback',
@@ -319,7 +325,8 @@ def read_cmd_arguments(default_port=9100):
     parser.add_argument('--disable-road-info', dest='disable_road_info',
                         action='store_true')
     parser.add_argument('-k', '--backend-stream', dest='backend_stream',
-                        default=None, help='Backend stream URL')
+                        default=default_backend_stream,
+                        help='Backend stream URL')
     parser.add_argument('-i', '--score-info-url', dest='score_info_url',
                         default=DEFAULT_SCORE_INFO_URL,
                         help='Scores info service URL')
